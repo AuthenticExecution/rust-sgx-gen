@@ -119,7 +119,7 @@ pub mod authentic_execution {
             Err(_)  => return failure(ResultCode::InternalError, None)
         };
 
-        let key = match ae_crypto::decrypt(cipher, &decoded_key, data_to_u16(nonce), &ad, &Encryption::Aead) {
+        let key = match ae_crypto::decrypt(cipher, &decoded_key, data_to_u16(nonce), &ad, &Encryption::Aes) {
            Ok(k)    => k,
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
