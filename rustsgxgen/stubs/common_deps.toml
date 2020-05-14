@@ -1,0 +1,5 @@
+[dependencies]
+lazy_static = "1.4.0"
+base64 = "0.12.0"
+ae_crypto = { git = "https://github.com/gianlu33/thesis-rust-libraries.git" }
+network_lib = { git = "https://github.com/gianlu33/thesis-rust-libraries.git" }
