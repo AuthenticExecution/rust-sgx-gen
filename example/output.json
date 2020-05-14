@@ -1,0 +1,15 @@
+{
+    "name": "input",
+    "id": 1,
+    "key": "ScKXkugsuNjr7+VL9uPyrg==",
+    "inputs": {
+        "input1": 2
+    },
+    "outputs": {
+        "button_pressed": 0,
+        "output1": 1
+    },
+    "entrypoints": {
+        "press_button": 2
+    }
+}
