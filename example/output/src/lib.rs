@@ -1,12 +1,12 @@
 #[macro_use] extern crate lazy_static;
 
-extern crate network_lib;
+extern crate reactive_net;
 
 mod __authentic_execution;
 pub mod __run;
 
 #[allow(unused_imports)] use __authentic_execution::authentic_execution;
-#[allow(unused_imports)] use network_lib::{ResultCode, ResultMessage};
+#[allow(unused_imports)] use reactive_net::{ResultCode, ResultMessage};
 
 // Some imports / other stuff..
 

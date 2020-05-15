@@ -90,7 +90,7 @@ This function will print to stdout the message (which is a `&str`), as well as t
 As described above, an entrypoint must return a `ResultMessage` element. A developer can either:
 
 - create his own `ResultMessage` by calling `ResultMessage::new(code, payload)`
-  - See [here](https://github.com/gianlu33/rust-sgx-libs/blob/master/network_lib/src/result_message.rs) for more details
+  - See [here](https://github.com/gianlu33/rust-sgx-libs/blob/master/reactive_net/src/result_message.rs) for more details
 
 - use the helper functions provided by the framework:
 
@@ -126,7 +126,7 @@ Where:
 - `entrypoint_id` is 16 bits
 - `data` can be omitted
 
-One can use the [`network_lib`](https://github.com/gianlu33/rust-sgx-libs/tree/master/network_lib) utility functions to send more easily a message (using `write_message`)
+One can use the [`reactive_net`](https://github.com/gianlu33/rust-sgx-libs/tree/master/reactive_net) utility functions to send more easily a message (using `write_message`)
 
 ### Call the module indirectly
 
@@ -143,4 +143,4 @@ Where:
 - `sm_id` is the module id (provided as input to rust-sgx-gen, also present in the output JSON file)
 - `entrypoint_id` and `data` are the same as before
 
-We can use the helper function `write_command` of `network_lib` to send this kind of message easily.
+We can use the helper function `write_command` of `reactive_net` to send this kind of message easily.

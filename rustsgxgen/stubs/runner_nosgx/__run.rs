@@ -7,7 +7,7 @@ lazy_static! {
 
 
 fn handle_client(mut stream: TcpStream) {
-    let payload = match network_lib::read_message(&mut stream) {
+    let payload = match reactive_net::read_message(&mut stream) {
         Ok(p) => p,
         Err(e) => {
             debug(&format!("{}", e));
@@ -17,7 +17,7 @@ fn handle_client(mut stream: TcpStream) {
 
     let resp = handle_entrypoint(&payload);
 
-    if let Err(e) = network_lib::write_result(&mut stream, &resp) {
+    if let Err(e) = reactive_net::write_result(&mut stream, &resp) {
         debug(&format!("{}", e));
     }
 }

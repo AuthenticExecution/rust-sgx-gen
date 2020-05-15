@@ -1,14 +1,14 @@
 pub mod authentic_execution {
     extern crate base64;
     extern crate ae_crypto;
-    extern crate network_lib;
+    extern crate reactive_net;
 
     use std::collections::HashMap;
     use std::sync::Mutex;
     use std::thread;
     use std::net::TcpStream;
 
-    use network_lib::{ResultCode, CommandCode, ResultMessage, CommandMessage};
+    use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage};
     use ae_crypto::Encryption;
     use crate::__run::MODULE_KEY;
 
@@ -229,7 +229,7 @@ pub mod authentic_execution {
 
                     let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
 
-                    if let Err(e) = network_lib::write_command(&mut stream, &cmd) {
+                    if let Err(e) = reactive_net::write_command(&mut stream, &cmd) {
                         debug(&format!("{}", e));
                     }
             });
