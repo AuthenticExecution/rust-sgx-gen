@@ -203,35 +203,35 @@ pub mod authentic_execution {
     /// Send the output payload to the event manager, which will forward it to the input connected to the `index` output
     fn send_to_em(index : u16, mut data : Vec<u8>) {
         thread::spawn(move || {
-                    let addr = format!("127.0.0.1:{}", *EM_PORT);
+            let addr = format!("127.0.0.1:{}", *EM_PORT);
 
-                    debug(&format!("Sending output {} to EM", index));
+            debug(&format!("Sending output {} to EM", index));
 
-                    let data_len = data.len();
-                    if data_len > 65531 {
-                            debug("Data is too big. Aborting");
-                            return;
-                    }
+            let data_len = data.len();
+            if data_len > 65531 {
+                    debug("Data is too big. Aborting");
+                    return;
+            }
 
-                    let mut payload = Vec::with_capacity(data_len + 4);
-                    payload.extend_from_slice(&(*MODULE_ID).to_be_bytes());
-                    payload.extend_from_slice(&index.to_be_bytes());
-                    payload.append(&mut data);
+            let mut payload = Vec::with_capacity(data_len + 4);
+            payload.extend_from_slice(&(*MODULE_ID).to_be_bytes());
+            payload.extend_from_slice(&index.to_be_bytes());
+            payload.append(&mut data);
 
-                    let mut stream = match TcpStream::connect(addr) {
-                        Ok(s) => s,
-                        Err(_) => {
-                            debug("Cannot connect to EM");
-                            return;
-                        }
-                    };
-                    debug("Connected to EM");
+            let mut stream = match TcpStream::connect(addr) {
+                Ok(s) => s,
+                Err(_) => {
+                    debug("Cannot connect to EM");
+                    return;
+                }
+            };
+            debug("Connected to EM");
 
-                    let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
+            let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
 
-                    if let Err(e) = reactive_net::write_command(&mut stream, &cmd) {
-                        debug(&format!("{}", e));
-                    }
+            if let Err(e) = reactive_net::write_command(&mut stream, &cmd) {
+                debug(&format!("{}", e));
+            }
             });
     }
 

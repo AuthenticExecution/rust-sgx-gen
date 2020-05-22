@@ -56,25 +56,12 @@ Stub Rust files to provide standard functions / data structures / macro definiti
 
 ## Runners
 
-### `runner_nosgx_simple`
+A runner file includes the logic of the `main()` function.
 
-Simple TCP server (no SGX) which listens for connections (serially) and calls its entrypoints
-- The port is 4000 + MODULE_ID
+Two different runners are provided: `runner_nosgx` and `runner_sgx`. Both of them implement a TCP server, listening to the SM port (which is the sum of EM port and Module ID).
 
-### `runner_nosgx`
+The difference between the two runners is how the Module's Master Key is obtained:
 
-Runner for SM to perform Authentic Execution without using Intel SGX. It implements a TCP server
+- in `runner_nosgx` the key is hardcoded by rust-sgx-gen.
 
-- EM port is passed as argument
-  - SM port is: `EM port + SM ID`
-
-- The TCP server waits for entrypoint calls (quite much the same as `runner_nosgx_simple`)
-- The handling of outputs is performed by the `send_to_em` function, which spawns a thread that sends the data to the EM
-
-### `runner_sgx_noattestation`
-
-Runner for SM to perform AE with Intel SGX. The mechanism is basically the same as `runner_nosgx`
-
-### `runner_sgx`
-
-The ultimate runner. It expands `runner_sgx_noattestation` by performing Remote Attestation with the deployer, in order to retrieve the symmetric Module Key.
+- in `runner_sgx` the key is retrieved after performing Remote Attestation with the Deployer. The public key of `ra_sp` (the deployer's application that performs RA) needs to be hardcoded in the code.
