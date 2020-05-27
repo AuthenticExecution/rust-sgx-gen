@@ -5,9 +5,11 @@ import toml
 import re
 import subprocess
 import json
-import base64
 
 from . import conf
+
+class Error(Exception):
+    pass
 
 
 def _prepare_output_dir(input, output):
@@ -20,24 +22,29 @@ def _prepare_output_dir(input, output):
 def _check_input_module(path):
     src = os.path.join(path, "src")
     main = os.path.join(src, "main.rs")
+    lib = os.path.join(src, "lib.rs")
     cargo = os.path.join(path, "Cargo.toml")
 
     # Check if the path is a valid Cargo project
     retval = subprocess.call(["cargo",  "verify-project", "--manifest-path", cargo], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 
     if retval != 0:
-        raise Exception("The input path is not a valid Cargo project!")
+        raise Error("The input path is not a valid Cargo project!")
 
     # Check absence of main.rs
     if os.path.exists(main):
-        raise Exception("The main.rs file must not exist! Check the rules")
+        raise Error("main.rs file must not exist! Check the rules")
+
+    # Check presence of lib.rs
+    if not os.path.exists(lib):
+        raise Error("lib.rs file does not exist")
 
     # Check Cargo.toml structure and dependencies
     cargo = toml.load(cargo)
     if "lib" in cargo:
-        raise Exception("The Cargo.toml file must not contain a [lib] section!")
+        raise Error("The Cargo.toml file must not contain a [lib] section!")
     if "bin" in cargo:
-        raise Exception("The Cargo.toml file must not contain a [[bin]] section!")
+        raise Error("The Cargo.toml file must not contain a [[bin]] section!")
 
     return cargo
 
@@ -49,14 +56,14 @@ def _parse_annotations(file):
         content = f.read()
 
     new_content, outputs = __parse_outputs(content)
-    inputs = __parse_inputs(content)
+    inputs = __parse_inputs(content, len(outputs))
     entrypoints = __parse_entrypoints(content)
 
     return inputs, outputs, entrypoints, new_content
 
 
 def __parse_outputs(content):
-    outputs = []
+    outputs = {}
     id = 0
     cnt = 0
 
@@ -77,36 +84,32 @@ def __parse_outputs(content):
         content = content[:pos] + inj_fn + content[pos:]
         cnt += len(inj_fn)
 
+        outputs[fname] = id
         id += 1
-        outputs.append(fname)
 
     return content, outputs
 
 
-def __parse_inputs(content):
-    return __parse_input_entry(content, conf.REGEX_INPUT)
+def __parse_inputs(content, start_index):
+    return __parse_input_entry(content, conf.REGEX_INPUT, start_index)
 
 
 def __parse_entrypoints(content):
-    return __parse_input_entry(content, conf.REGEX_ENTRY)
+    return __parse_input_entry(content, conf.REGEX_ENTRY, conf.START_ENTRY_INDEX)
 
 
-def __parse_input_entry(content, regex):
-    vals = []
-
+def __parse_input_entry(content, regex, start_index):
     p = re.compile(regex, re.MULTILINE | re.ASCII)
     results = p.findall(content)
 
-    return results
+    return { v : i for (i, v) in enumerate(results, start_index) }
 
 
-def _write_module_info(package, args, inputs, outputs, entrypoints):
-    file = args.print
-
-    if args.key:
-        content = __helper_write_indexes([(package, "name"), (args.moduleid, "id"), (base64.b64encode(args.key).decode(), "key")])
+def _write_module_info(file, name, id, inputs, outputs, entrypoints, key=None):
+    if key is not None:
+        content = __helper_write_indexes([(name, "name"), (id, "id"), (key, "key")])
     else:
-        content = __helper_write_indexes([(package, "name"), (args.moduleid, "id")])
+        content = __helper_write_indexes([(name, "name"), (id, "id")])
 
     content["inputs"] = inputs
     content["outputs"] = outputs
@@ -135,16 +138,17 @@ def _copy_main(src, cargo):
         f.write(content)
 
 
-def _add_fields(dest, src, section):
-    if section not in src:
-        logging.debug("{} not present in source file".format(section))
-        return
+def _add_fields(dest, src):
+    for section in src.keys():
+        if section not in dest:
+            dest[section] = {}
 
-    if section not in dest:
-        dest[section] = {}
+        for key in src[section].keys():
+            if key in dest[section]:
+                logging.warn("{} {} already in destination cargo file, overwriting".format(section, key))
 
-    for key in src[section].keys():
-        if key in dest[section]:
-            logging.warn("{} {} already in destination cargo file, overwriting".format(section, key))
+            dest[section][key] = src[section][key]
 
-        dest[section][key] = src[section][key]
+
+def _generate_key(length=conf.KEY_LENGTH):
+    return os.urandom(length)

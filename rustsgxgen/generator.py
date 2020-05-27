@@ -6,46 +6,50 @@ import toml
 import base64
 
 from . import conf
-from .utils import _parse_annotations, _write_module_info, _prepare_output_dir, _check_input_module, _copy_main, _add_fields
+from .utils import _parse_annotations, _write_module_info, _prepare_output_dir, \
+                                    _check_input_module, _copy_main, _add_fields, \
+                                    _generate_key
 from .initialization import _set_parser, _set_logging
+
 
 def __run(args, cargo):
     out_src = os.path.join(args.output, "src")
     module_name = cargo["package"]["name"]
 
     ## lib.rs file ##
+    ## In this section, we update lib.rs:
+    ##      - parse the annotations (inputs, outputs, entry points)
+    ##      - add imports (for authentic execution functions and constants)
 
-    lib_file = os.path.join(out_src, conf.LIB_FILE)
-
-    if not os.path.exists(lib_file):
-        raise Exception("lib.rs file does not exist")
+    lib_file = os.path.join(out_src, "lib.rs")
 
     # parse annotations, add outputs
     inputs, outputs, entrypoints, content = _parse_annotations(lib_file)
-    outputs = { v : i for (i, v) in enumerate(outputs) }
-    inputs = { v : i for (i, v) in enumerate(inputs, len(outputs)) }
-    entrypoints = { v : i for (i, v) in enumerate(entrypoints, conf.START_ENTRY_INDEX) }
 
     # read imports
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_MODS_USES), "r") as f:
         mods_uses = f.read()
 
-    # search for lazy_static import
+    # search for lazy_static import (if already present, we do not add it again)
     lazy = ""
     if not re.match(conf.REGEX_LAZY, content, re.MULTILINE):
         lazy = conf.RUST_LAZY
 
     # write new content
-    full_str = lazy + "\n" + mods_uses + "\n" + content
+    complete_lib = lazy + "\n" + mods_uses + "\n" + content
     with open(lib_file, "w") as f:
-        f.write(full_str)
+        f.write(complete_lib)
 
     ## Authentic Execution file ##
+    ## In this section, we add to the project all the needed for authentic execution
+    ## we also need to update some data structures with the information retrieved
+    ## before
 
-    # read and format constants
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_CONSTANTS), "r") as f:
         constants = f.read()
 
+    # add inputs and entrypoints functions to two hashmaps, so that they can
+    # be called by their ID
     inputs_fn = ""
     entrypoints_fn = ""
     for input in inputs:
@@ -54,8 +58,11 @@ def __run(args, cargo):
     for entry in entrypoints:
         entrypoints_fn += conf.RUST_INSERT_ENTRY.format(id=entrypoints[entry], name=entry)
 
-    constants = constants.format(id=args.moduleid, em_port=args.emport, name=module_name, inputs=inputs_fn, entrypoints=entrypoints_fn)
+    # format constants with module's info
+    constants = constants.format(id=args.moduleid, em_port=args.emport,
+                    name=module_name, inputs=inputs_fn, entrypoints=entrypoints_fn)
 
+    # add constants to authentic_execution file, add the file to project
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_AUTH_EXEC), "r") as f:
         auth_exec = f.read()
 
@@ -65,38 +72,54 @@ def __run(args, cargo):
         f.write(auth_exec)
 
     ## Main and other files ##
+    ## Here, we will add the logic for main(): the project will not be a Cargo lib
+    ## anymore, but an executable
 
     _copy_main(out_src, cargo)
 
     # add runner
-    with open(os.path.join(conf.STUBS_FOLDER, args.runner, conf.STUB_RUNNER_RUN), "r") as f:
+    # sgx: the master key is retrieved by means of Remote Attestation (RA)
+    # nosgx: the master key is generated here and hardcoded inside the code
+    runner = args.runner
+    runner_folder = os.path.join(conf.STUBS_FOLDER, runner.to_str())
+
+    # add __run.rs, that includes the main logic and the logic for the key
+    with open(os.path.join(runner_folder, conf.STUB_RUNNER_RUN), "r") as f:
         runner_file = f.read()
 
-    if args.key:
-        runner_file = runner_file.replace("___MODULE_KEY___", base64.b64encode(args.key).decode())
-    if args.spkey:
-        with open(args.spkey, "r") as f:
-            sp_key = f.read()
-            runner_file = runner_file.replace("__SP_VKEY_PEM__", sp_key)
+    if runner.has_hardcoded_key():
+        # key is hardcoded
+        master_key = _generate_key()
+        encoded_key = base64.b64encode(master_key).decode()
+        runner_file = runner_file.replace("___MODULE_KEY___", encoded_key)
+    else:
+        # key is retrieved through remote attestation
+        master_key = None
+        encoded_key = None
+        if args.spkey:
+            with open(args.spkey, "r") as f:
+                sp_key = f.read()
+                runner_file = runner_file.replace("__SP_VKEY_PEM__", sp_key)
+        else:
+            logging.warning("ra_sp public key not provided as input! RA won't work")
 
     with open(os.path.join(out_src, conf.STUB_RUNNER_RUN), "w") as f:
         f.write(runner_file)
 
-    # edit Cargo.toml adding the dependencies needed
-    # general dependencies
+    ## Finally, edit Cargo.toml adding the needed dependencies ##
+
+    # general dependencies (common to all runners)
     try:
         common_deps = toml.load(os.path.join(conf.STUBS_FOLDER, conf.CARGO_DEPENDENCIES))
-        for key in common_deps.keys():
-            _add_fields(cargo, common_deps, key)
+        _add_fields(cargo, common_deps)
     except Exception as e:
         logging.error("Common deps file not found")
         raise e
 
     # runner dependencies
     try:
-        runner_deps = toml.load(os.path.join(conf.STUBS_FOLDER, args.runner, conf.STUB_RUNNER_DEPS))
-        for key in runner_deps.keys():
-            _add_fields(cargo, runner_deps, key)
+        runner_deps = toml.load(os.path.join(runner_folder, conf.STUB_RUNNER_DEPS))
+        _add_fields(cargo, runner_deps)
     except Exception as e:
         logging.warn("Runner dependencies file not found")
 
@@ -104,27 +127,28 @@ def __run(args, cargo):
     with open(os.path.join(args.output, "Cargo.toml"), "w") as f:
         toml.dump(cargo, f)
 
-    # write to an output file module name, inputs, outputs, entrypoints as well as their index
+    # write module info to output file (if specified)
     if args.print:
-        _write_module_info(module_name, args, inputs, outputs, entrypoints)
+        _write_module_info(args.print, module_name, args.moduleid, inputs,
+                                                outputs, entrypoints, encoded_key)
 
     logging.debug("Done")
 
-    return inputs, outputs, entrypoints
+    return inputs, outputs, entrypoints, master_key
 
 
 def generate(args):
     try:
-        logging.debug("Checking input project..")
         # check if the input dir is a correct Rust Cargo module
+        logging.debug("Checking input project..")
         cargo = _check_input_module(args.input)
 
-        logging.debug("Creating output project..")
         # copy dir
+        logging.debug("Creating output project..")
         _prepare_output_dir(args.input, args.output)
 
-        logging.debug("Updating code..")
-        # execute logic
+        # generate code
+        logging.debug("Generating code..")
         return __run(args, cargo)
 
     except Exception as e:

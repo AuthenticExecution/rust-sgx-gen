@@ -1,9 +1,8 @@
 import os
+from .runner import Runner
 
 DEFAULT_LOG_LEVEL = "info"
 STUBS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stubs")
-LIB_FILE = "lib.rs"
-DEFAULT_INFO_FILE = "__sm_info.json"
 
 
 # Actual crates/modules
@@ -19,10 +18,12 @@ STUB_CONSTANTS = "constants.rs"
 STUB_MAIN = "main.rs"
 STUB_AUTH_EXEC = "__authentic_execution.rs"
 CARGO_DEPENDENCIES = "common_deps.toml"
-# runner to load (select the one you want)
-DEFAULT_RUNNER = "runner_sgx"
+
+DEFAULT_RUNNER = Runner.SGX
 STUB_RUNNER_RUN = "__run.rs"
 STUB_RUNNER_DEPS = "dependencies.toml"
+
+KEY_LENGTH = 16
 
 
 # Starting entrypoint index: 0 is set_key, 1 is handle_input
