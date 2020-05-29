@@ -119,7 +119,7 @@ pub mod authentic_execution {
             Err(_)  => return failure(ResultCode::InternalError, None)
         };
 
-        let key = match reactive_crypto::decrypt(cipher, &decoded_key, data_to_u16(nonce), &ad, &Encryption::Aes) {
+        let key = match reactive_crypto::decrypt(cipher, &decoded_key, &ad, &Encryption::Aes) {
            Ok(k)    => k,
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
@@ -156,7 +156,7 @@ pub mod authentic_execution {
         };
 
         let nonce = conn.get_nonce();
-        let data = match reactive_crypto::decrypt(payload, conn.get_key(), nonce, &u16_to_data(nonce), conn.get_encryption()) {
+        let data = match reactive_crypto::decrypt(payload, conn.get_key(), &u16_to_data(nonce), conn.get_encryption()) {
            Ok(d) => d,
            Err(_) => return failure(ResultCode::CryptoError, None)
         };
@@ -186,7 +186,8 @@ pub mod authentic_execution {
         };
 
         let nonce = conn.get_nonce();
-        let payload = match reactive_crypto::encrypt(data, conn.get_key(), nonce, &u16_to_data(nonce), conn.get_encryption()) {
+        let payload = match reactive_crypto::encrypt(data, conn.get_key(),
+                                                &u16_to_data(nonce), conn.get_encryption()) {
            Ok(p) => p,
            Err(e) => {
                debug(&format!("{}", e));

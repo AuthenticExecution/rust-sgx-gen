@@ -60,6 +60,11 @@ pub mod authentic_execution {
     }
 
     #[allow(dead_code)]
+    pub fn data_to_u32(data : &[u8]) -> u32 {
+        u32::from_be_bytes([data[0], data[1], data[2], data[3]])
+    }
+
+    #[allow(dead_code)]
     pub fn u16_to_data(val : u16) -> [u8; 2] {
         val.to_be_bytes()
     }
@@ -100,17 +105,18 @@ pub mod authentic_execution {
         // The payload is: [encryption_type - index - nonce - cipher]
         debug("ENTRYPOINT: set_key");
 
-        if data.len() < 5 {
+        if data.len() < 9 {
             return failure(ResultCode::IllegalPayload, None)
         }
 
-        set_key(data[0], &data[1..3], &data[3..5], &data[5..])
+        set_key(data[0], &data[1..5], &data[5..7], &data[7..9], &data[9..])
     }
 
-    fn set_key(enc : u8, index : &[u8], nonce : &[u8], cipher : &[u8]) -> ResultMessage {
+    fn set_key(enc : u8, conn_id : &[u8], index : &[u8], nonce : &[u8], cipher : &[u8]) -> ResultMessage {
         // The tag is included in the cipher
 
         let mut ad = vec!(enc);
+        ad.extend_from_slice(conn_id);
         ad.extend_from_slice(index);
         ad.extend_from_slice(nonce);
 
@@ -119,7 +125,7 @@ pub mod authentic_execution {
             Err(_)  => return failure(ResultCode::InternalError, None)
         };
 
-        let key = match reactive_crypto::decrypt(cipher, &decoded_key, data_to_u16(nonce), &ad, &Encryption::Aes) {
+        let key = match reactive_crypto::decrypt(cipher, &decoded_key, &ad, &Encryption::Aes) {
            Ok(k)    => k,
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
@@ -130,7 +136,7 @@ pub mod authentic_execution {
         };
 
         let conn = connection::Connection::new(data_to_u16(index), 0, key, enc_type);
-        add_connection(conn);
+        add_connection(data_to_u32(conn_id), conn);
 
         success(None)
     }
@@ -139,32 +145,33 @@ pub mod authentic_execution {
         // The payload is: [index - payload]
         debug("ENTRYPOINT: handle_input");
 
-        if data.len() < 2 {
+        if data.len() < 4 {
             return failure(ResultCode::IllegalPayload, None)
         }
 
-        handle_input(data_to_u16(data), &data[2..])
+        handle_input(data_to_u32(data), &data[4..])
     }
 
-    fn handle_input(index : u16, payload : &[u8]) -> ResultMessage {
+    fn handle_input(conn_id : u32, payload : &[u8]) -> ResultMessage {
         // the index is not associated data because it is not sent by the `from` module, but by the event manager
 
         let mut map = CONNECTIONS.lock().unwrap();
-        let conn = match map.get_mut(&index) {
+        let conn = match map.get_mut(&conn_id) {
             Some(v) => v,
             None => return failure(ResultCode::BadRequest, None)
         };
 
         let nonce = conn.get_nonce();
-        let data = match reactive_crypto::decrypt(payload, conn.get_key(), nonce, &u16_to_data(nonce), conn.get_encryption()) {
+        let data = match reactive_crypto::decrypt(payload, conn.get_key(), &u16_to_data(nonce), conn.get_encryption()) {
            Ok(d) => d,
            Err(_) => return failure(ResultCode::CryptoError, None)
         };
 
         conn.increment_nonce();
+        let index = &conn.get_index();
         drop(map); // fix: if the input calls an output, the CONNECTIONS map has to be free
 
-        let handler = match INPUTS.get(&index) {
+        let handler = match INPUTS.get(index) {
             Some(h) => h,
             None => return failure(ResultCode::BadRequest, None)
         };
@@ -177,35 +184,32 @@ pub mod authentic_execution {
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
     pub fn handle_output(index : u16, data : &[u8]) {
         let mut map = CONNECTIONS.lock().unwrap();
-        let conn = match map.get_mut(&index) {
-            Some(v) => v,
-            None => {
-                debug("Error: Connection not present");
-                return; // connection non present
-            }
-        };
 
-        let nonce = conn.get_nonce();
-        let payload = match reactive_crypto::encrypt(data, conn.get_key(), nonce, &u16_to_data(nonce), conn.get_encryption()) {
-           Ok(p) => p,
-           Err(e) => {
-               debug(&format!("{}", e));
-               return; //encryption failed (there's nothing we can do in this case)
-           }
-        };
+        // find all connections associated to the output
+        let connections = map.iter_mut().filter(|(_, v)| v.get_index() == index);
 
-        conn.increment_nonce();
-        drop(map);
+        for (conn_id, conn) in connections {
+            let nonce = conn.get_nonce();
+            let payload = match reactive_crypto::encrypt(data, conn.get_key(),
+                                            &u16_to_data(nonce), conn.get_encryption()) {
+               Ok(p) => p,
+               Err(e) => {
+                   debug(&format!("{}", e));
+                   return; //encryption failed (there's nothing we can do in this case)
+               }
+            };
 
-        send_to_em(index, payload);
+            conn.increment_nonce();
+            send_to_em(*conn_id, payload);
+        }
     }
 
     /// Send the output payload to the event manager, which will forward it to the input connected to the `index` output
-    fn send_to_em(index : u16, mut data : Vec<u8>) {
+    fn send_to_em(conn_id : u32, mut data : Vec<u8>) {
         thread::spawn(move || {
             let addr = format!("127.0.0.1:{}", *EM_PORT);
 
-            debug(&format!("Sending output {} to EM", index));
+            debug(&format!("Sending output with conn ID {} to EM", conn_id));
 
             let data_len = data.len();
             if data_len > 65531 {
@@ -214,8 +218,7 @@ pub mod authentic_execution {
             }
 
             let mut payload = Vec::with_capacity(data_len + 4);
-            payload.extend_from_slice(&(*MODULE_ID).to_be_bytes());
-            payload.extend_from_slice(&index.to_be_bytes());
+            payload.extend_from_slice(&conn_id.to_be_bytes());
             payload.append(&mut data);
 
             let mut stream = match TcpStream::connect(addr) {
@@ -237,7 +240,7 @@ pub mod authentic_execution {
 
     // Variables: connections. Contains, for each connection, key, nonce, and handler index
     lazy_static! {
-        static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
+        static ref CONNECTIONS: Mutex<HashMap<u32, connection::Connection>> = {
             Mutex::new(HashMap::new())
         };
     }
@@ -245,7 +248,7 @@ pub mod authentic_execution {
     // Constants: Module's key, ID, Inputs, Outputs
 {CONSTANTS}
 
-    fn add_connection(conn : connection::Connection) {
-        CONNECTIONS.lock().unwrap().insert(conn.get_index(), conn);
+    fn add_connection(conn_id : u32, conn : connection::Connection) {
+        CONNECTIONS.lock().unwrap().insert(conn_id, conn);
     }
 }
