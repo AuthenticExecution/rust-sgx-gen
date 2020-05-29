@@ -105,11 +105,11 @@ pub mod authentic_execution {
         // The payload is: [encryption_type - index - nonce - cipher]
         debug("ENTRYPOINT: set_key");
 
-        if data.len() < 9 {
+        if data.len() < 7 {
             return failure(ResultCode::IllegalPayload, None)
         }
 
-        set_key(data[0], &data[1..5], &data[5..7], &data[7..9], &data[9..])
+        set_key(data[0], &data[1..3], &data[3..5], &data[5..7], &data[7..])
     }
 
     fn set_key(enc : u8, conn_id : &[u8], index : &[u8], nonce : &[u8], cipher : &[u8]) -> ResultMessage {
@@ -136,7 +136,7 @@ pub mod authentic_execution {
         };
 
         let conn = connection::Connection::new(data_to_u16(index), 0, key, enc_type);
-        add_connection(data_to_u32(conn_id), conn);
+        add_connection(data_to_u16(conn_id), conn);
 
         success(None)
     }
@@ -145,14 +145,14 @@ pub mod authentic_execution {
         // The payload is: [index - payload]
         debug("ENTRYPOINT: handle_input");
 
-        if data.len() < 4 {
+        if data.len() < 2 {
             return failure(ResultCode::IllegalPayload, None)
         }
 
-        handle_input(data_to_u32(data), &data[4..])
+        handle_input(data_to_u16(data), &data[2..])
     }
 
-    fn handle_input(conn_id : u32, payload : &[u8]) -> ResultMessage {
+    fn handle_input(conn_id : u16, payload : &[u8]) -> ResultMessage {
         // the index is not associated data because it is not sent by the `from` module, but by the event manager
 
         let mut map = CONNECTIONS.lock().unwrap();
@@ -205,7 +205,7 @@ pub mod authentic_execution {
     }
 
     /// Send the output payload to the event manager, which will forward it to the input connected to the `index` output
-    fn send_to_em(conn_id : u32, mut data : Vec<u8>) {
+    fn send_to_em(conn_id : u16, mut data : Vec<u8>) {
         thread::spawn(move || {
             let addr = format!("127.0.0.1:{}", *EM_PORT);
 
@@ -217,7 +217,7 @@ pub mod authentic_execution {
                     return;
             }
 
-            let mut payload = Vec::with_capacity(data_len + 4);
+            let mut payload = Vec::with_capacity(data_len + 2);
             payload.extend_from_slice(&conn_id.to_be_bytes());
             payload.append(&mut data);
 
@@ -240,7 +240,7 @@ pub mod authentic_execution {
 
     // Variables: connections. Contains, for each connection, key, nonce, and handler index
     lazy_static! {
-        static ref CONNECTIONS: Mutex<HashMap<u32, connection::Connection>> = {
+        static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
             Mutex::new(HashMap::new())
         };
     }
@@ -248,7 +248,7 @@ pub mod authentic_execution {
     // Constants: Module's key, ID, Inputs, Outputs
 {CONSTANTS}
 
-    fn add_connection(conn_id : u32, conn : connection::Connection) {
+    fn add_connection(conn_id : u16, conn : connection::Connection) {
         CONNECTIONS.lock().unwrap().insert(conn_id, conn);
     }
 }
