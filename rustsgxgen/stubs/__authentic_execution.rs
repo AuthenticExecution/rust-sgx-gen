@@ -77,8 +77,35 @@ pub mod authentic_execution {
         ResultMessage::new(code, data)
     }
 
-    pub fn debug(msg : &str) {
-        println!("[{}] {}", &*MODULE_NAME, msg);
+    #[cfg(feature = "debug_prints")]
+    #[macro_export]
+    macro_rules! debug {
+        ($msg:expr) => {{
+                println!("[{}] DEBUG: {}", &*MODULE_NAME, $msg);
+        }};
+    }
+    #[cfg(not(feature = "debug_prints"))]
+    #[macro_export]
+    macro_rules! debug {
+        ($( $args:expr ),*) => {}
+    }
+    #[macro_export]
+    macro_rules! info {
+        ($msg:expr) => {{
+                println!("[{}] INFO: {}", &*MODULE_NAME, $msg);
+        }};
+    }
+    #[macro_export]
+    macro_rules! error {
+        ($msg:expr) => {{
+                println!("[{}] ERROR: {}", &*MODULE_NAME, $msg);
+        }};
+    }
+    #[macro_export]
+    macro_rules! warning {
+        ($msg:expr) => {{
+                println!("[{}] WARNING: {}", &*MODULE_NAME, $msg);
+        }};
     }
 
     /// This is the only interface to the software module from outside
@@ -103,7 +130,7 @@ pub mod authentic_execution {
 
     pub fn set_key_wrapper(data : &[u8]) -> ResultMessage  {
         // The payload is: [encryption_type - index - nonce - cipher]
-        debug("ENTRYPOINT: set_key");
+        debug!("ENTRYPOINT: set_key");
 
         if data.len() < 7 {
             return failure(ResultCode::IllegalPayload, None)
@@ -143,7 +170,7 @@ pub mod authentic_execution {
 
     pub fn handle_input_wrapper(data : &[u8]) -> ResultMessage  {
         // The payload is: [index - payload]
-        debug("ENTRYPOINT: handle_input");
+        debug!("ENTRYPOINT: handle_input");
 
         if data.len() < 2 {
             return failure(ResultCode::IllegalPayload, None)
@@ -194,7 +221,7 @@ pub mod authentic_execution {
                                             &u16_to_data(nonce), conn.get_encryption()) {
                Ok(p) => p,
                Err(e) => {
-                   debug(&format!("{}", e));
+                   error!(&format!("{}", e));
                    return; //encryption failed (there's nothing we can do in this case)
                }
             };
@@ -209,11 +236,11 @@ pub mod authentic_execution {
         thread::spawn(move || {
             let addr = format!("127.0.0.1:{}", *EM_PORT);
 
-            debug(&format!("Sending output with conn ID {} to EM", conn_id));
+            debug!(&format!("Sending output with conn ID {} to EM", conn_id));
 
             let data_len = data.len();
             if data_len > 65531 {
-                    debug("Data is too big. Aborting");
+                    error!("Data is too big. Aborting");
                     return;
             }
 
@@ -224,16 +251,16 @@ pub mod authentic_execution {
             let mut stream = match TcpStream::connect(addr) {
                 Ok(s) => s,
                 Err(_) => {
-                    debug("Cannot connect to EM");
+                    error!("Cannot connect to EM");
                     return;
                 }
             };
-            debug("Connected to EM");
+            debug!("Connected to EM");
 
             let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
 
             if let Err(e) = reactive_net::write_command(&mut stream, &cmd) {
-                debug(&format!("{}", e));
+                error!(&format!("{}", e));
             }
             });
     }
