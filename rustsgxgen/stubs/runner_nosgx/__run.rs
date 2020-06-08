@@ -32,12 +32,12 @@ pub fn run() -> std::io::Result<()> {
     let listener = TcpListener::bind(host)?;
 
     for stream in listener.incoming() {
-        debug!("Received connection");
+        //debug!("Received connection");
         match stream {
             Ok(s) => handle_client(s),
             Err(_) => error!("ERROR unwrapping the stream")
         }
-        debug!("Connection ended\n");
+        //debug!("Connection ended");
     }
     Ok(())
 }
