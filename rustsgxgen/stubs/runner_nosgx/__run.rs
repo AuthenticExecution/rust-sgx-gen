@@ -1,5 +1,5 @@
 use std::net::{TcpListener, TcpStream};
-use crate::{debug, info, error};
+use crate::{info, error};
 use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MODULE_ID, handle_entrypoint};
 
 lazy_static! {
