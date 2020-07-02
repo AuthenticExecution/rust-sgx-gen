@@ -87,7 +87,7 @@ pub mod authentic_execution {
     #[cfg(not(feature = "debug_prints"))]
     #[macro_export]
     macro_rules! debug {
-        ($( $args:expr ),*) => {}
+        ($( $args:expr ),*) => {{}};
     }
     #[macro_export]
     macro_rules! info {
