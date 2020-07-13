@@ -3,7 +3,7 @@ pub mod authentic_execution {
     extern crate reactive_crypto;
     extern crate reactive_net;
 
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
     use std::sync::Mutex;
     use std::thread;
     use std::net::TcpStream;
@@ -267,8 +267,8 @@ pub mod authentic_execution {
 
     // Variables: connections. Contains, for each connection, key, nonce, and handler index
     lazy_static! {
-        static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
-            Mutex::new(HashMap::new())
+        static ref CONNECTIONS: Mutex<BTreeMap<u16, connection::Connection>> = {
+            Mutex::new(BTreeMap::new())
         };
     }
 
