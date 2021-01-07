@@ -98,13 +98,13 @@ pub mod authentic_execution {
     #[macro_export]
     macro_rules! error {
         ($msg:expr) => {{
-                println!("[{}] ERROR: {}", &*MODULE_NAME, $msg);
+                eprintln!("[{}] ERROR: {}", &*MODULE_NAME, $msg);
         }};
     }
     #[macro_export]
     macro_rules! warning {
         ($msg:expr) => {{
-                println!("[{}] WARNING: {}", &*MODULE_NAME, $msg);
+                eprintln!("[{}] WARNING: {}", &*MODULE_NAME, $msg);
         }};
     }
 
