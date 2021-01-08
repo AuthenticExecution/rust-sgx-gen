@@ -4,7 +4,7 @@ setup(
     name='rustsgxgen',
     version='0.1',
     packages=find_packages(),
-    install_requires=['toml', 'colorlog'],
+    install_requires=['toml==0.10.2', 'colorlog==4.6.2'],
     entry_points={
         'console_scripts': ['rust-sgx-gen = rustsgxgen.generator:__main']
     },
