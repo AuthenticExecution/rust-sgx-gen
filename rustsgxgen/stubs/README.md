@@ -58,10 +58,10 @@ Stub Rust files to provide standard functions / data structures / macro definiti
 
 A runner file includes the logic of the `main()` function.
 
-Two different runners are provided: `runner_nosgx` and `runner_sgx`. Both of them implement a TCP server, listening to the SM port (which is the sum of EM port and Module ID).
+Two different runners are provided: `runner_native` and `runner_sgx`. Both of them implement a TCP server, listening to the SM port (which is the sum of EM port and Module ID).
 
 The difference between the two runners is how the Module's Master Key is obtained:
 
-- in `runner_nosgx` the key is hardcoded by rust-sgx-gen.
+- in `runner_native` the key is hardcoded by rust-sgx-gen.
 
 - in `runner_sgx` the key is retrieved after performing Remote Attestation with the Deployer. The public key of `ra_sp` (the deployer's application that performs RA) needs to be hardcoded in the code.

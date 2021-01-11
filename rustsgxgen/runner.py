@@ -5,8 +5,8 @@ class Error(Exception):
 
 
 class Runner(Enum):
-    SGX         = 1
-    NoSGX       = 2
+    SGX             = 1
+    NATIVE          = 2
 
     @staticmethod
     def from_str(str):
@@ -14,8 +14,8 @@ class Runner(Enum):
 
         if lower_str == "sgx":
             return Runner.SGX
-        if lower_str == "nosgx":
-            return Runner.NoSGX
+        if lower_str == "native":
+            return Runner.NATIVE
 
         raise Error("No matching runner for {}".format(str))
 
@@ -23,12 +23,12 @@ class Runner(Enum):
     def to_str(self):
         if self == Runner.SGX:
             return "runner_sgx"
-        if self == Runner.NoSGX:
-            return "runner_nosgx"
+        if self == Runner.NATIVE:
+            return "runner_native"
 
 
     def has_hardcoded_key(self):
-        if self == Runner.NoSGX:
+        if self == Runner.NATIVE:
             return True
 
         return False

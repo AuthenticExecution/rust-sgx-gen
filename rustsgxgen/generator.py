@@ -79,7 +79,7 @@ def __run(args, cargo):
 
     # add runner
     # sgx: the master key is retrieved by means of Remote Attestation (RA)
-    # nosgx: the master key is generated here and hardcoded inside the code
+    # native: the master key is generated here and hardcoded inside the code
     runner = args.runner
     runner_folder = os.path.join(conf.STUBS_FOLDER, runner.to_str())
 
