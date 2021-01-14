@@ -459,7 +459,7 @@ pub mod authentic_execution {
         };
 
         // Send command
-        let cmd = CommandMessage::new(CommandCode::ModuleRequest, Some(payload));
+        let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
 
         if let Err(_) = reactive_net::write_command(&mut stream, &cmd) {
             return Err(Error::NetworkError)
