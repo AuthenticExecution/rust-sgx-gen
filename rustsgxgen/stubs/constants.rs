@@ -12,7 +12,14 @@
             let mut m = std::collections::HashMap::new();
             m.insert(0, set_key_wrapper as fn(&[u8]) -> ResultMessage);
             m.insert(1, handle_input_wrapper as fn(&[u8]) -> ResultMessage);
+            m.insert(2, handle_handler_wrapper as fn(&[u8]) -> ResultMessage);
     {entrypoints}
+            m
+        }};
+        static ref HANDLERS: std::collections::HashMap<u16, fn(&[u8]) -> Vec<u8>> = {{
+            #[allow(unused_mut)]
+            let mut m = std::collections::HashMap::new();
+    {handlers}
             m
         }};
     }}

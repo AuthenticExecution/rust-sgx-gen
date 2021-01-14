@@ -23,8 +23,8 @@ def __run(args, cargo):
 
     lib_file = os.path.join(out_src, "lib.rs")
 
-    # parse annotations, add outputs
-    inputs, outputs, entrypoints, content = _parse_annotations(lib_file)
+    # parse annotations
+    content, data = _parse_annotations(lib_file)
 
     # read imports
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_MODS_USES), "r") as f:
@@ -48,19 +48,27 @@ def __run(args, cargo):
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_CONSTANTS), "r") as f:
         constants = f.read()
 
-    # add inputs and entrypoints functions to two hashmaps, so that they can
-    # be called by their ID
+    # add inputs entrypoints, handlers functions to hashmaps, so that they can
+    # be called given their ID
+    inputs = data["inputs"]
     inputs_fn = ""
-    entrypoints_fn = ""
     for input in inputs:
         inputs_fn += conf.RUST_INSERT_INPUT.format(id=inputs[input], name=input)
 
+    entrypoints = data["entrypoints"]
+    entrypoints_fn = ""
     for entry in entrypoints:
         entrypoints_fn += conf.RUST_INSERT_ENTRY.format(id=entrypoints[entry], name=entry)
 
+    handlers = data["handlers"]
+    handlers_fn = ""
+    for handler in handlers:
+        handlers_fn += conf.RUST_INSERT_HANDLER.format(id=handlers[handler], name=handler)
+
     # format constants with module's info
     constants = constants.format(id=args.moduleid, em_port=args.emport,
-                    name=module_name, inputs=inputs_fn, entrypoints=entrypoints_fn)
+                    name=module_name, inputs=inputs_fn,
+                    entrypoints=entrypoints_fn, handlers=handlers_fn)
 
     # add constants to authentic_execution file, add the file to project
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_AUTH_EXEC), "r") as f:
@@ -129,12 +137,11 @@ def __run(args, cargo):
 
     # write module info to output file (if specified)
     if args.print:
-        _write_module_info(args.print, module_name, args.moduleid, inputs,
-                                                outputs, entrypoints, encoded_key)
+        _write_module_info(args.print, module_name, args.moduleid, data, encoded_key)
 
     logging.debug("Done")
 
-    return inputs, outputs, entrypoints, master_key
+    return data, master_key
 
 
 def generate(args):

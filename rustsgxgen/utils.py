@@ -55,23 +55,54 @@ def _parse_annotations(file):
     with open(file, "r") as f:
         content = f.read()
 
-    new_content, outputs = __parse_outputs(content)
-    inputs = __parse_inputs(content, len(outputs))
-    entrypoints = __parse_entrypoints(content)
+    data = {}
 
-    return inputs, outputs, entrypoints, new_content
+    data["inputs"] = __parse_inputs(content)
+    content, data["outputs"] = __parse_outputs(content)
+    data["entrypoints"] = __parse_entrypoints(content)
+    data["handlers"] = __parse_handlers(content)
+    content, data["requests"] = __parse_requests(content)
+
+    return content, data
+
+
+def __parse_inputs(content):
+    return __parse(content, conf.REGEX_INPUT, conf.START_INPUT_INDEX)
 
 
 def __parse_outputs(content):
-    outputs = {}
+    return __parse_inject(content, conf.STUB_OUTPUT, conf.REGEX_OUTPUT, conf.START_OUTPUT_INDEX)
+
+
+def __parse_entrypoints(content):
+    return __parse(content, conf.REGEX_ENTRY, conf.START_ENTRY_INDEX)
+
+
+def __parse_handlers(content):
+    return __parse(content, conf.REGEX_HANDLER, conf.START_HANDLER_INDEX)
+
+
+def __parse_requests(content):
+    return __parse_inject(content, conf.STUB_REQUEST, conf.REGEX_REQUEST, conf.START_REQUEST_INDEX)
+
+
+def __parse(content, regex, start_index):
+    p = re.compile(regex, re.MULTILINE | re.ASCII)
+    results = p.findall(content)
+
+    return { v : i for (i, v) in enumerate(results, start_index) }
+
+
+def __parse_inject(content, stub, regex, start_index):
+    res_dict = {}
     id = 0
     cnt = 0
 
-    # read output stub from file
-    with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_OUTPUT), "r") as f:
+    # read stub from file
+    with open(os.path.join(conf.STUBS_FOLDER, stub), "r") as f:
         fn = f.read()
 
-    p = re.compile(conf.REGEX_OUTPUT, re.MULTILINE | re.ASCII)
+    p = re.compile(regex, re.MULTILINE | re.ASCII)
     results = p.finditer(content)
 
     for result in results:
@@ -84,36 +115,19 @@ def __parse_outputs(content):
         content = content[:pos] + inj_fn + content[pos:]
         cnt += len(inj_fn)
 
-        outputs[fname] = id
+        res_dict[fname] = start_index + id
         id += 1
 
-    return content, outputs
+    return content, res_dict
 
 
-def __parse_inputs(content, start_index):
-    return __parse_input_entry(content, conf.REGEX_INPUT, start_index)
-
-
-def __parse_entrypoints(content):
-    return __parse_input_entry(content, conf.REGEX_ENTRY, conf.START_ENTRY_INDEX)
-
-
-def __parse_input_entry(content, regex, start_index):
-    p = re.compile(regex, re.MULTILINE | re.ASCII)
-    results = p.findall(content)
-
-    return { v : i for (i, v) in enumerate(results, start_index) }
-
-
-def _write_module_info(file, name, id, inputs, outputs, entrypoints, key=None):
+def _write_module_info(file, name, id, data, key=None):
     if key is not None:
-        content = __helper_write_indexes([(name, "name"), (id, "id"), (key, "key")])
+        module_info = __helper_write_indexes([(name, "name"), (id, "id"), (key, "key")])
     else:
-        content = __helper_write_indexes([(name, "name"), (id, "id")])
+        module_info = __helper_write_indexes([(name, "name"), (id, "id")])
 
-    content["inputs"] = inputs
-    content["outputs"] = outputs
-    content["entrypoints"] = entrypoints
+    content = {**module_info, **data}
 
     with open(file, 'w', encoding='utf-8') as f:
         json.dump(content, f, ensure_ascii=False, indent=4)
