@@ -95,7 +95,7 @@ def __parse(content, regex, start_index):
 
 def __parse_inject(content, stub, regex, start_index):
     res_dict = {}
-    id = 0
+    i = 0
     cnt = 0
 
     # read stub from file
@@ -106,6 +106,7 @@ def __parse_inject(content, stub, regex, start_index):
     results = p.finditer(content)
 
     for result in results:
+        id = start_index + i
         fname = result.group(1)
         end = result.end()
         #logging.debug("fname: {} end: {}".format(fname, end))
@@ -115,8 +116,8 @@ def __parse_inject(content, stub, regex, start_index):
         content = content[:pos] + inj_fn + content[pos:]
         cnt += len(inj_fn)
 
-        res_dict[fname] = start_index + id
-        id += 1
+        res_dict[fname] = id
+        i += 1
 
     return content, res_dict
 
