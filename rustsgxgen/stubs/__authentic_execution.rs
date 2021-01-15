@@ -8,7 +8,7 @@ pub mod authentic_execution {
     use std::thread;
     use std::net::TcpStream;
 
-    use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage};
+    use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage, EntrypointID};
     use reactive_crypto::Encryption;
     use crate::__run::MODULE_KEY;
 
@@ -326,7 +326,7 @@ pub mod authentic_execution {
             let conn = match map.get_mut(&conn_id) {
                 Some(c)     => c,
                 None        => {
-                    error!(&format!("{}", Error::NoConnectionForOutput));
+                    error!(&format!("{}", Error::InternalError));
                     continue; // or break? Btw this SHOULD NEVER happen
                 }
             };
@@ -342,7 +342,7 @@ pub mod authentic_execution {
             };
 
             conn.increment_nonce();
-            send_to_em(conn_id, payload);
+            send_to_em(EntrypointID::HandleInput as u16, conn_id, payload);
         }
     }
 
@@ -373,7 +373,7 @@ pub mod authentic_execution {
         };
 
         // send payload
-        let response = send_to_em_blocking(conn_id, payload)?;
+        let response = send_to_em_blocking(EntrypointID::HandleHandler as u16, conn_id, payload)?;
 
         // Check fesponse
         let resp_body = match response.get_code() {
@@ -402,7 +402,7 @@ pub mod authentic_execution {
     }
 
     /// Send the output payload to the event manager, which will forward it to the input connected to the `index` output
-    fn send_to_em(conn_id : u16, mut data : Vec<u8>) {
+    fn send_to_em(entry_id : u16, conn_id : u16, mut data : Vec<u8>) {
         thread::spawn(move || {
             let addr = format!("127.0.0.1:{}", *EM_PORT);
 
@@ -414,7 +414,8 @@ pub mod authentic_execution {
                     return;
             }
 
-            let mut payload = Vec::with_capacity(data_len + 2);
+            let mut payload = Vec::with_capacity(data_len + 4);
+            payload.extend_from_slice(&entry_id.to_be_bytes());
             payload.extend_from_slice(&conn_id.to_be_bytes());
             payload.append(&mut data);
 
@@ -437,7 +438,7 @@ pub mod authentic_execution {
 
     /// Send the output payload to the event manager, which will forward it to the handler connected to the `index` id
     /// Blocking: we will wait for a response
-    fn send_to_em_blocking(conn_id : u16, mut data : Vec<u8>) -> Result<ResultMessage, Error> {
+    fn send_to_em_blocking(entry_id : u16, conn_id : u16, mut data : Vec<u8>) -> Result<ResultMessage, Error> {
         let addr = format!("127.0.0.1:{}", *EM_PORT);
 
         debug!(&format!("Sending request with conn ID {} to EM", conn_id));
@@ -448,7 +449,8 @@ pub mod authentic_execution {
                 return Err(Error::PayloadTooLarge);
         }
 
-        let mut payload = Vec::with_capacity(data_len + 2);
+        let mut payload = Vec::with_capacity(data_len + 4);
+        payload.extend_from_slice(&entry_id.to_be_bytes());
         payload.extend_from_slice(&conn_id.to_be_bytes());
         payload.append(&mut data);
 
