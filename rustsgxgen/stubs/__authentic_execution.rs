@@ -5,7 +5,6 @@ pub mod authentic_execution {
 
     use std::collections::HashMap;
     use std::sync::Mutex;
-    use std::thread;
     use std::net::TcpStream;
 
     use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage, EntrypointID};
@@ -15,7 +14,6 @@ pub mod authentic_execution {
     #[derive(Debug)]
     pub enum Error {
         NoConnectionForRequest,
-        NoConnectionForOutput,
         InternalError,
         CryptoError,
         NetworkError,
@@ -342,7 +340,9 @@ pub mod authentic_execution {
             };
 
             conn.increment_nonce();
-            send_to_em(EntrypointID::HandleInput as u16, conn_id, payload);
+            if let Err(e) = send_to_em(EntrypointID::HandleInput as u16, conn_id, payload, false) {
+                error!(&format!("{}", e));
+            }
         }
     }
 
@@ -373,9 +373,12 @@ pub mod authentic_execution {
         };
 
         // send payload
-        let response = send_to_em_blocking(EntrypointID::HandleHandler as u16, conn_id, payload)?;
+        let response = match send_to_em(EntrypointID::HandleHandler as u16, conn_id, payload, true)? {
+            Some(r)     => r,
+            None        => return Err(Error::InternalError) //it should never happen
+        };
 
-        // Check fesponse
+        // Check response
         let resp_body = match response.get_code() {
             ResultCode::Ok      => response.get_payload(),
             _                   => return Err(Error::BadResponse)
@@ -401,44 +404,10 @@ pub mod authentic_execution {
         Ok(data)
     }
 
-    /// Send the output payload to the event manager, which will forward it to the input connected to the `index` output
-    fn send_to_em(entry_id : u16, conn_id : u16, mut data : Vec<u8>) {
-        thread::spawn(move || {
-            let addr = format!("127.0.0.1:{}", *EM_PORT);
-
-            debug!(&format!("Sending output with conn ID {} to EM", conn_id));
-
-            let data_len = data.len();
-            if data_len > 65531 {
-                    error!("Data is too big. Aborting");
-                    return;
-            }
-
-            let mut payload = Vec::with_capacity(data_len + 4);
-            payload.extend_from_slice(&entry_id.to_be_bytes());
-            payload.extend_from_slice(&conn_id.to_be_bytes());
-            payload.append(&mut data);
-
-            let mut stream = match TcpStream::connect(addr) {
-                Ok(s) => s,
-                Err(_) => {
-                    error!("Cannot connect to EM");
-                    return;
-                }
-            };
-            debug!("Connected to EM");
-
-            let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
-
-            if let Err(e) = reactive_net::write_command(&mut stream, &cmd) {
-                error!(&format!("{}", e));
-            }
-        });
-    }
-
     /// Send the output payload to the event manager, which will forward it to the handler connected to the `index` id
     /// Blocking: we will wait for a response
-    fn send_to_em_blocking(entry_id : u16, conn_id : u16, mut data : Vec<u8>) -> Result<ResultMessage, Error> {
+    fn send_to_em(entry_id : u16, conn_id : u16, mut data : Vec<u8>, has_resp : bool)
+            -> Result<Option<ResultMessage>, Error> {
         let addr = format!("127.0.0.1:{}", *EM_PORT);
 
         debug!(&format!("Sending request with conn ID {} to EM", conn_id));
@@ -467,10 +436,13 @@ pub mod authentic_execution {
             return Err(Error::NetworkError)
         }
 
-        // Wait for response
-        match reactive_net::read_result(&mut stream) {
-            Ok(r)   => Ok(r),
-            Err(_)  => Err(Error::NetworkError)
+        // If has_resp, wait for result. Otherwise return
+        match has_resp {
+            true    => match reactive_net::read_result(&mut stream) {
+                        Ok(r)   => Ok(Some(r)),
+                        Err(_)  => Err(Error::NetworkError)
+                        }
+            false   => Ok(None)
         }
     }
 
