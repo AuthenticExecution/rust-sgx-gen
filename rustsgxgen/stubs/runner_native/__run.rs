@@ -1,6 +1,7 @@
 use std::net::{TcpListener, TcpStream};
 use crate::{info, error};
-use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MODULE_ID, handle_entrypoint};
+use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MODULE_ID, NUM_THREADS, handle_entrypoint};
+use threadpool::ThreadPool;
 
 lazy_static! {
     pub static ref MODULE_KEY: String = String::from("___MODULE_KEY___");
@@ -26,6 +27,8 @@ fn handle_client(mut stream: TcpStream) {
 
 pub fn run() -> std::io::Result<()> {
     let port = *EM_PORT + *MODULE_ID;
+    let pool = ThreadPool::new(*NUM_THREADS);
+
     let host = format!("127.0.0.1:{}", port); // no one from outside can access SM
 
     info!(&format!("Listening on {}", host));
@@ -34,7 +37,7 @@ pub fn run() -> std::io::Result<()> {
     for stream in listener.incoming() {
         //debug!("Received connection");
         match stream {
-            Ok(s) => handle_client(s),
+            Ok(s) => pool.execute(|| { handle_client(s) } ),
             Err(_) => error!("ERROR unwrapping the stream")
         }
         //debug!("Connection ended");

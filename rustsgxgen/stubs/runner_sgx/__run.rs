@@ -1,7 +1,8 @@
 use std::net::{TcpListener, TcpStream};
 use crate::{debug, info, error};
-use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MODULE_ID, handle_entrypoint};
+use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MODULE_ID, NUM_THREADS, handle_entrypoint};
 extern crate base64;
+use threadpool::ThreadPool;
 
 use ra_enclave::EnclaveRaContext;
 
@@ -60,6 +61,7 @@ fn remote_attestation() -> std::io::Result<String> {
 
 pub fn run() -> std::io::Result<()> {
     let port = *EM_PORT + *MODULE_ID;
+    let pool = ThreadPool::new(*NUM_THREADS);
 
     debug!("Waiting for attestation");
 
@@ -75,7 +77,7 @@ pub fn run() -> std::io::Result<()> {
     for stream in listener.incoming() {
         //debug!("Received connection");
         match stream {
-            Ok(s) => handle_client(s),
+            Ok(s) => pool.execute(|| { handle_client(s) } ),
             Err(_) => error!("ERROR unwrapping the stream")
         }
         //debug!("Connection ended");
