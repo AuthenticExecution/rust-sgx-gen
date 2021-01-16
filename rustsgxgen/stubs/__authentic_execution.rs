@@ -78,12 +78,12 @@ pub mod authentic_execution {
                 self.nonce += 1;
             }
 
-            pub fn get_key(&self) -> &Vec<u8> {
-                &self.key
+            pub fn get_key(&self) -> Vec<u8> {
+                self.key.clone()
             }
 
-            pub fn get_encryption(&self) -> &Encryption {
-                &self.encryption
+            pub fn get_encryption(&self) -> Encryption {
+                self.encryption.clone()
             }
         }
     }
@@ -237,14 +237,14 @@ pub mod authentic_execution {
         };
 
         let nonce = conn.get_nonce();
-        let data = match reactive_crypto::decrypt(payload, conn.get_key(), &u16_to_data(nonce), conn.get_encryption()) {
+        let data = match reactive_crypto::decrypt(payload, &conn.get_key(), &u16_to_data(nonce), &conn.get_encryption()) {
            Ok(d) => d,
            Err(_) => return failure(ResultCode::CryptoError, None)
         };
 
         conn.increment_nonce();
         let index = &conn.get_index();
-        drop(map); // fix: if the input calls an output, the CONNECTIONS map has to be free
+        drop(map); // release map as soon as we don't need it anymore
 
         let handler = match INPUTS.get(index) {
             Some(h) => h,
@@ -283,30 +283,32 @@ pub mod authentic_execution {
         let index = conn.get_index();
 
         // decrypt payload
-        let data = match reactive_crypto::decrypt(payload, key, &u16_to_data(nonce), encryption) {
+        let data = match reactive_crypto::decrypt(payload, &key, &u16_to_data(nonce), &encryption) {
            Ok(d) => d,
            Err(_) => return failure(ResultCode::CryptoError, None)
         };
 
+        // increment nonce twice, also for next encryption (which always succeeds).
+        conn.increment_nonce();
+        conn.increment_nonce();
+
+        // release lock of map, so that it can be used by other threads
+        drop(map);
+
         // execute handler
         let handler = match HANDLERS.get(&index) {
             Some(h) => h,
-            None => return failure(ResultCode::BadRequest, None)
+            None => return failure(ResultCode::InternalError, None) // it should never happen
         };
 
         let result = handler(&data);
 
         // encrypt response
-        let response = match reactive_crypto::encrypt(&result, key,
-                                        &u16_to_data(nonce+1), encryption) {
+        let response = match reactive_crypto::encrypt(&result, &key,
+                                        &u16_to_data(nonce+1), &encryption) {
            Ok(p)    => p,
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
-
-        // increment nonce two times (two crypto operations)
-        // TODO what if something is wrong in the middle
-        conn.increment_nonce();
-        conn.increment_nonce();
 
         success(Some(response))
     }
@@ -318,9 +320,10 @@ pub mod authentic_execution {
             None            => return // no connections associated to the output
         };
 
-        let mut map = CONNECTIONS.lock().unwrap();
 
         for conn_id in connections {
+            let mut map = CONNECTIONS.lock().unwrap();
+
             let conn = match map.get_mut(&conn_id) {
                 Some(c)     => c,
                 None        => {
@@ -330,8 +333,8 @@ pub mod authentic_execution {
             };
 
             let nonce = conn.get_nonce();
-            let payload = match reactive_crypto::encrypt(data, conn.get_key(),
-                                            &u16_to_data(nonce), conn.get_encryption()) {
+            let payload = match reactive_crypto::encrypt(data, &conn.get_key(),
+                                            &u16_to_data(nonce), &conn.get_encryption()) {
                Ok(p) => p,
                Err(e) => {
                    error!(&format!("{}", e));
@@ -340,7 +343,8 @@ pub mod authentic_execution {
             };
 
             conn.increment_nonce();
-            if let Err(e) = send_to_em(EntrypointID::HandleInput as u16, conn_id, payload, false) {
+            let func = || drop(map);
+            if let Err(e) = send_to_em(EntrypointID::HandleInput as u16, conn_id, payload, false, func) {
                 error!(&format!("{}", e));
             }
         }
@@ -354,7 +358,7 @@ pub mod authentic_execution {
             None        => return Err(Error::NoConnectionForRequest)
         };
 
-        // find all connections associated to the output
+        // get connection from conn_id
         let mut map = CONNECTIONS.lock().unwrap();
         let conn = match map.get_mut(&conn_id) {
             Some(v)     => v,
@@ -366,14 +370,24 @@ pub mod authentic_execution {
         let key = conn.get_key();
         let encryption = conn.get_encryption();
 
-        let payload = match reactive_crypto::encrypt(data, key,
-                                        &u16_to_data(nonce), encryption) {
+        let payload = match reactive_crypto::encrypt(data, &key,
+                                        &u16_to_data(nonce), &encryption) {
            Ok(p)    => p,
            Err(_)   => return Err(Error::CryptoError)
         };
 
-        // send payload
-        let response = match send_to_em(EntrypointID::HandleHandler as u16, conn_id, payload, true)? {
+        // increment nonce twice (also for decrypt later)
+        // if errors occur in the meantime, nonces between source and dest will be out of sync in any case.
+        // better increment them immediately
+        conn.increment_nonce();
+        conn.increment_nonce();
+
+        // send payload:
+        // drop map only after the message is sent to the EM.
+        // to avoid out-of-order events in parallel executions of the same request
+        let func = || drop(map);
+        let response = match send_to_em(EntrypointID::HandleHandler as u16, conn_id, payload, true,
+            func)? {
             Some(r)     => r,
             None        => return Err(Error::InternalError) //it should never happen
         };
@@ -390,23 +404,18 @@ pub mod authentic_execution {
         };
 
         // decrypt response
-        let data = match reactive_crypto::decrypt(resp_body, key,
-                                        &u16_to_data(nonce+1), encryption) {
+        let data = match reactive_crypto::decrypt(resp_body, &key,
+                                        &u16_to_data(nonce+1), &encryption) {
            Ok(d)    => d,
            Err(_)   => return Err(Error::CryptoError)
         };
-
-        // increment nonce two times (two crypto operations)
-        //TODO: what happens in case of failure in the middle?
-        conn.increment_nonce();
-        conn.increment_nonce();
 
         Ok(data)
     }
 
     /// Send the output payload to the event manager, which will forward it to the handler connected to the `index` id
     /// Blocking: we will wait for a response
-    fn send_to_em(entry_id : u16, conn_id : u16, mut data : Vec<u8>, has_resp : bool)
+    fn send_to_em(entry_id : u16, conn_id : u16, mut data : Vec<u8>, has_resp : bool, func : impl FnOnce())
             -> Result<Option<ResultMessage>, Error> {
         let addr = format!("127.0.0.1:{}", *EM_PORT);
 
@@ -435,6 +444,9 @@ pub mod authentic_execution {
         if let Err(_) = reactive_net::write_command(&mut stream, &cmd) {
             return Err(Error::NetworkError)
         }
+
+        // execute function (i.e., drop the lock on the connections map)
+        func();
 
         // If has_resp, wait for result. Otherwise return
         match has_resp {
