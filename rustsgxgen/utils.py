@@ -1,10 +1,11 @@
-import shutil
 import os
 import logging
 import toml
 import re
 import subprocess
 import json
+import distutils
+from distutils import dir_util
 
 from . import conf
 
@@ -13,10 +14,7 @@ class Error(Exception):
 
 
 def _prepare_output_dir(input, output):
-    if not os.path.exists(output):
-        os.mkdir(output)
-    shutil.copytree(os.path.join(input, "src"), os.path.join(output, "src"))
-    shutil.copy(os.path.join(input, "Cargo.toml"), os.path.join(output, "Cargo.toml"))
+    dir_util.copy_tree(input, output)
 
 
 def _check_input_module(path):

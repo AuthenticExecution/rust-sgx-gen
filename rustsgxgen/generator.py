@@ -1,6 +1,5 @@
 import logging
 import os
-import shutil
 import re
 import toml
 import base64
@@ -160,10 +159,6 @@ def generate(args):
 
     except Exception as e:
         logging.error(e)
-
-        if os.path.exists(args.output):
-            shutil.rmtree(args.output)
-
         exit(1)
 
 
