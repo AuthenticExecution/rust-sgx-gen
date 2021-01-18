@@ -58,15 +58,35 @@ fn remote_attestation() -> std::io::Result<String> {
     Ok(base64::encode(&result.1))
 }
 
+fn run_single_thread(listener : TcpListener) {
+    for stream in listener.incoming() {
+        //debug!("Received connection");
+        match stream {
+            Ok(s)   => handle_client(s),
+            Err(_)  => error!("ERROR unwrapping the stream")
+        }
+        //debug!("Connection ended");
+    }
+}
+
+fn run_multithread(listener : TcpListener) {
+    let pool = ThreadPool::new(*NUM_THREADS - 1);
+
+    for stream in listener.incoming() {
+        //debug!("Received connection");
+        match stream {
+            Ok(s)   => pool.execute(|| { handle_client(s) } ),
+            Err(_)  => error!("ERROR unwrapping the stream")
+        }
+        //debug!("Connection ended");
+    }
+}
 
 pub fn run() -> std::io::Result<()> {
     let port = *EM_PORT + *MODULE_ID;
-    let pool = ThreadPool::new(*NUM_THREADS);
 
     debug!("Waiting for attestation");
-
-    // obtain the module's symmetric key
-    let _ = *MODULE_KEY; //to trigger the remote attestation
+    let _ = *MODULE_KEY; // trigger the remote attestation
 
     // authentic execution
     let host = format!("127.0.0.1:{}", port); // no one from outside can access SM
@@ -74,13 +94,11 @@ pub fn run() -> std::io::Result<()> {
     info!(&format!("Listening on {}", host));
     let listener = TcpListener::bind(host)?;
 
-    for stream in listener.incoming() {
-        //debug!("Received connection");
-        match stream {
-            Ok(s) => pool.execute(|| { handle_client(s) } ),
-            Err(_) => error!("ERROR unwrapping the stream")
-        }
-        //debug!("Connection ended");
+    match *NUM_THREADS {
+        0   => panic!("NUM_THREADS is zero"),
+        1   => run_single_thread(listener),
+        _   => run_multithread(listener)
     }
+
     Ok(())
 }
