@@ -6,7 +6,7 @@ mod __authentic_execution;
 pub mod __run;
 
 #[allow(unused_imports)] use __authentic_execution::authentic_execution;
-#[allow(unused_imports)] use __authentic_execution::authentic_execution::{MODULE_NAME, success, failure, handle_output};
+#[allow(unused_imports)] use __authentic_execution::authentic_execution::{MODULE_NAME, success, failure, handle_output, handle_request, Error};
 #[allow(unused_imports)] use reactive_net::{ResultCode, ResultMessage};
 
 // Imports and other stuff
@@ -14,7 +14,7 @@ pub mod __run;
 //@ sm_output(button_pressed)
 pub fn button_pressed(data : &[u8]) {
     debug!("OUTPUT: button_pressed");
-	let id : u16 = 0;
+	let id : u16 = 16384;
 
     handle_output(id, data);
 }
@@ -22,9 +22,18 @@ pub fn button_pressed(data : &[u8]) {
 //@ sm_output(output1)
 pub fn output1(data : &[u8]) {
     debug!("OUTPUT: output1");
-	let id : u16 = 1;
+	let id : u16 = 16385;
 
     handle_output(id, data);
+}
+
+
+//@ sm_request(get_value)
+pub fn get_value(data : &[u8]) -> Result<Vec<u8>, Error> {
+    debug!("REQUEST: get_value");
+	let id : u16 = 32768;
+
+    handle_request(id, data)
 }
 
 
@@ -42,6 +51,13 @@ pub fn input1(data : &[u8]) {
     info!("INPUT: input1");
 
     output1(data);
+}
+
+//@ sm_handler
+pub fn handler_value(_data : &[u8]) -> Vec<u8> {
+    debug!("HANDLER: handler_value");
+
+    vec!(1,2,3,4)
 }
 
 // User-defined functions and other stuff

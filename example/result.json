@@ -1,15 +1,20 @@
 {
     "name": "input",
     "id": 1,
-    "key": "JTYWEQrZxHg34gw2TP+2EA==",
     "inputs": {
-        "input1": 2
+        "input1": 0
     },
     "outputs": {
-        "button_pressed": 0,
-        "output1": 1
+        "button_pressed": 16384,
+        "output1": 16385
     },
     "entrypoints": {
-        "press_button": 2
+        "press_button": 3
+    },
+    "handlers": {
+        "handler_value": 49152
+    },
+    "requests": {
+        "get_value": 32768
     }
 }

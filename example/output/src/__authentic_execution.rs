@@ -5,12 +5,46 @@ pub mod authentic_execution {
 
     use std::collections::HashMap;
     use std::sync::Mutex;
-    use std::thread;
     use std::net::TcpStream;
 
-    use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage};
+    use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage, EntrypointID};
     use reactive_crypto::Encryption;
     use crate::__run::MODULE_KEY;
+
+    #[derive(Debug)]
+    pub enum Error {
+        NoConnectionForRequest,
+        InternalError,
+        CryptoError,
+        NetworkError,
+        PayloadTooLarge,
+        BadResponse
+    }
+
+    impl std::fmt::Display for Error {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>)
+            -> Result<(), std::fmt::Error> {
+                write!(f, "{:?}", self)
+            }
+    }
+
+    enum IndexType {
+        Input,
+        Output,
+        Request,
+        Handler
+    }
+
+    impl IndexType {
+        pub fn from_u16(value : u16) -> IndexType {
+            match value {
+                v if v < 16384  => IndexType::Input,
+                v if v < 32768  => IndexType::Output,
+                v if v < 49152  => IndexType::Request,
+                _               => IndexType::Handler
+            }
+        }
+    }
 
     mod connection {
         use reactive_crypto::Encryption;
@@ -44,12 +78,12 @@ pub mod authentic_execution {
                 self.nonce += 1;
             }
 
-            pub fn get_key(&self) -> &Vec<u8> {
-                &self.key
+            pub fn get_key(&self) -> Vec<u8> {
+                self.key.clone()
             }
 
-            pub fn get_encryption(&self) -> &Encryption {
-                &self.encryption
+            pub fn get_encryption(&self) -> Encryption {
+                self.encryption.clone()
             }
         }
     }
@@ -87,7 +121,7 @@ pub mod authentic_execution {
     #[cfg(not(feature = "debug_prints"))]
     #[macro_export]
     macro_rules! debug {
-        ($( $args:expr ),*) => {}
+        ($( $args:expr ),*) => {{}};
     }
     #[macro_export]
     macro_rules! info {
@@ -162,8 +196,22 @@ pub mod authentic_execution {
             None    => return failure(ResultCode::CryptoError, None)
         };
 
-        let conn = connection::Connection::new(data_to_u16(index), 0, key, enc_type);
-        add_connection(data_to_u16(conn_id), conn);
+        let index_u16 = data_to_u16(index);
+        let conn_id_u16 = data_to_u16(conn_id);
+        let conn = connection::Connection::new(index_u16, 0, key, enc_type);
+        add_connection(conn_id_u16, conn);
+
+        // if index is an output, add to "outputs"
+        // if index is request, add to "requests"
+        match IndexType::from_u16(index_u16) {
+            IndexType::Output   => {
+                add_output(index_u16, conn_id_u16);
+            },
+            IndexType::Request  => {
+                add_request(index_u16, conn_id_u16);
+            },
+            _                   => {}
+        }
 
         success(None)
     }
@@ -189,14 +237,14 @@ pub mod authentic_execution {
         };
 
         let nonce = conn.get_nonce();
-        let data = match reactive_crypto::decrypt(payload, conn.get_key(), &u16_to_data(nonce), conn.get_encryption()) {
+        let data = match reactive_crypto::decrypt(payload, &conn.get_key(), &u16_to_data(nonce), &conn.get_encryption()) {
            Ok(d) => d,
            Err(_) => return failure(ResultCode::CryptoError, None)
         };
 
         conn.increment_nonce();
         let index = &conn.get_index();
-        drop(map); // fix: if the input calls an output, the CONNECTIONS map has to be free
+        drop(map); // release map as soon as we don't need it anymore
 
         let handler = match INPUTS.get(index) {
             Some(h) => h,
@@ -208,17 +256,85 @@ pub mod authentic_execution {
         success(None)
     }
 
+    pub fn handle_handler_wrapper(data : &[u8]) -> ResultMessage  {
+        // The payload is: [index - payload]
+        debug!("ENTRYPOINT: handle_request");
+
+        if data.len() < 2 {
+            return failure(ResultCode::IllegalPayload, None)
+        }
+
+        handle_handler(data_to_u16(data), &data[2..])
+    }
+
+    fn handle_handler(conn_id : u16, payload : &[u8]) -> ResultMessage {
+        // the index is not associated data because it is not sent by the `from` module, but by the event manager
+
+        // get connection from map
+        let mut map = CONNECTIONS.lock().unwrap();
+        let conn = match map.get_mut(&conn_id) {
+            Some(v) => v,
+            None => return failure(ResultCode::BadRequest, None)
+        };
+
+        let nonce = conn.get_nonce();
+        let key = conn.get_key();
+        let encryption = conn.get_encryption();
+        let index = conn.get_index();
+
+        // decrypt payload
+        let data = match reactive_crypto::decrypt(payload, &key, &u16_to_data(nonce), &encryption) {
+           Ok(d) => d,
+           Err(_) => return failure(ResultCode::CryptoError, None)
+        };
+
+        // increment nonce twice, also for next encryption (which always succeeds).
+        conn.increment_nonce();
+        conn.increment_nonce();
+
+        // release lock of map, so that it can be used by other threads
+        drop(map);
+
+        // execute handler
+        let handler = match HANDLERS.get(&index) {
+            Some(h) => h,
+            None => return failure(ResultCode::InternalError, None) // it should never happen
+        };
+
+        let result = handler(&data);
+
+        // encrypt response
+        let response = match reactive_crypto::encrypt(&result, &key,
+                                        &u16_to_data(nonce+1), &encryption) {
+           Ok(p)    => p,
+           Err(_)   => return failure(ResultCode::CryptoError, None)
+        };
+
+        success(Some(response))
+    }
+
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
     pub fn handle_output(index : u16, data : &[u8]) {
-        let mut map = CONNECTIONS.lock().unwrap();
+        let connections = match get_connections_from_output(index) {
+            Some(vec)       => vec,
+            None            => return // no connections associated to the output
+        };
 
-        // find all connections associated to the output
-        let connections = map.iter_mut().filter(|(_, v)| v.get_index() == index);
 
-        for (conn_id, conn) in connections {
+        for conn_id in connections {
+            let mut map = CONNECTIONS.lock().unwrap();
+
+            let conn = match map.get_mut(&conn_id) {
+                Some(c)     => c,
+                None        => {
+                    error!(&format!("{}", Error::InternalError));
+                    continue; // or break? Btw this SHOULD NEVER happen
+                }
+            };
+
             let nonce = conn.get_nonce();
-            let payload = match reactive_crypto::encrypt(data, conn.get_key(),
-                                            &u16_to_data(nonce), conn.get_encryption()) {
+            let payload = match reactive_crypto::encrypt(data, &conn.get_key(),
+                                            &u16_to_data(nonce), &conn.get_encryption()) {
                Ok(p) => p,
                Err(e) => {
                    error!(&format!("{}", e));
@@ -227,47 +343,130 @@ pub mod authentic_execution {
             };
 
             conn.increment_nonce();
-            send_to_em(*conn_id, payload);
+            let func = || drop(map);
+            if let Err(e) = send_to_em(EntrypointID::HandleInput as u16, conn_id, payload, false, func) {
+                error!(&format!("{}", e));
+            }
         }
     }
 
-    /// Send the output payload to the event manager, which will forward it to the input connected to the `index` output
-    fn send_to_em(conn_id : u16, mut data : Vec<u8>) {
-        thread::spawn(move || {
-            let addr = format!("127.0.0.1:{}", *EM_PORT);
+    #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
+    pub fn handle_request(index : u16, data : &[u8]) -> Result<Vec<u8>, Error> {
+        // find connection associated to the request
+        let conn_id = match get_connection_from_request(index) {
+            Some(c)     => c,
+            None        => return Err(Error::NoConnectionForRequest)
+        };
 
-            debug!(&format!("Sending output with conn ID {} to EM", conn_id));
+        // get connection from conn_id
+        let mut map = CONNECTIONS.lock().unwrap();
+        let conn = match map.get_mut(&conn_id) {
+            Some(v)     => v,
+            None        => return Err(Error::InternalError) // it shouldn't happen
+        };
 
-            let data_len = data.len();
-            if data_len > 65531 {
-                    error!("Data is too big. Aborting");
-                    return;
-            }
+        // encrypt payload
+        let nonce = conn.get_nonce();
+        let key = conn.get_key();
+        let encryption = conn.get_encryption();
 
-            let mut payload = Vec::with_capacity(data_len + 2);
-            payload.extend_from_slice(&conn_id.to_be_bytes());
-            payload.append(&mut data);
+        let payload = match reactive_crypto::encrypt(data, &key,
+                                        &u16_to_data(nonce), &encryption) {
+           Ok(p)    => p,
+           Err(_)   => return Err(Error::CryptoError)
+        };
 
-            let mut stream = match TcpStream::connect(addr) {
-                Ok(s) => s,
-                Err(_) => {
-                    error!("Cannot connect to EM");
-                    return;
-                }
-            };
-            debug!("Connected to EM");
+        // increment nonce twice (also for decrypt later)
+        // if errors occur in the meantime, nonces between source and dest will be out of sync in any case.
+        // better increment them immediately
+        conn.increment_nonce();
+        conn.increment_nonce();
 
-            let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
+        // send payload:
+        // drop map only after the message is sent to the EM.
+        // to avoid out-of-order events in parallel executions of the same request
+        let func = || drop(map);
+        let response = match send_to_em(EntrypointID::HandleHandler as u16, conn_id, payload, true,
+            func)? {
+            Some(r)     => r,
+            None        => return Err(Error::InternalError) //it should never happen
+        };
 
-            if let Err(e) = reactive_net::write_command(&mut stream, &cmd) {
-                error!(&format!("{}", e));
-            }
-            });
+        // Check response
+        let resp_body = match response.get_code() {
+            ResultCode::Ok      => response.get_payload(),
+            _                   => return Err(Error::BadResponse)
+        };
+
+        let resp_body = match resp_body {
+            Some(p)     => p,
+            None        => return Err(Error::BadResponse)
+        };
+
+        // decrypt response
+        let data = match reactive_crypto::decrypt(resp_body, &key,
+                                        &u16_to_data(nonce+1), &encryption) {
+           Ok(d)    => d,
+           Err(_)   => return Err(Error::CryptoError)
+        };
+
+        Ok(data)
+    }
+
+    /// Send the output payload to the event manager, which will forward it to the handler connected to the `index` id
+    /// Blocking: we will wait for a response
+    fn send_to_em(entry_id : u16, conn_id : u16, mut data : Vec<u8>, has_resp : bool, func : impl FnOnce())
+            -> Result<Option<ResultMessage>, Error> {
+        let addr = format!("127.0.0.1:{}", *EM_PORT);
+
+        debug!(&format!("Sending request with conn ID {} to EM", conn_id));
+
+        // Create payload
+        let data_len = data.len();
+        if data_len > 65531 {
+                return Err(Error::PayloadTooLarge);
+        }
+
+        let mut payload = Vec::with_capacity(data_len + 4);
+        payload.extend_from_slice(&entry_id.to_be_bytes());
+        payload.extend_from_slice(&conn_id.to_be_bytes());
+        payload.append(&mut data);
+
+        // Connect to the EM
+        let mut stream = match TcpStream::connect(addr) {
+            Ok(s)   => s,
+            Err(_)  => return Err(Error::NetworkError)
+        };
+
+        // Send command
+        let cmd = CommandMessage::new(CommandCode::ModuleOutput, Some(payload));
+
+        if let Err(_) = reactive_net::write_command(&mut stream, &cmd) {
+            return Err(Error::NetworkError)
+        }
+
+        // execute function (i.e., drop the lock on the connections map)
+        func();
+
+        // If has_resp, wait for result. Otherwise return
+        match has_resp {
+            true    => match reactive_net::read_result(&mut stream) {
+                        Ok(r)   => Ok(Some(r)),
+                        Err(_)  => Err(Error::NetworkError)
+                        }
+            false   => Ok(None)
+        }
     }
 
     // Variables: connections. Contains, for each connection, key, nonce, and handler index
     lazy_static! {
         static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
+            Mutex::new(HashMap::new())
+        };
+        static ref OUTPUTS: Mutex<HashMap<u16, Vec<u16>>> = {
+            Mutex::new(HashMap::new())
+        };
+        static ref REQUESTS: Mutex<HashMap<u16, u16>> = {
             Mutex::new(HashMap::new())
         };
     }
@@ -277,10 +476,11 @@ pub mod authentic_execution {
         pub static ref MODULE_ID: u16 = 1;
         pub static ref MODULE_NAME: &'static str = "input";
         pub static ref EM_PORT: u16 = 5000;
+        pub static ref NUM_THREADS: usize = 1; //TODO assign custom value during code generation
         static ref INPUTS: std::collections::HashMap<u16, fn(&[u8])> = {
             #[allow(unused_mut)]
             let mut m = std::collections::HashMap::new();
-    		m.insert(2, crate::input1 as fn(&[u8]));
+    		m.insert(0, crate::input1 as fn(&[u8]));
 
             m
         };
@@ -288,7 +488,15 @@ pub mod authentic_execution {
             let mut m = std::collections::HashMap::new();
             m.insert(0, set_key_wrapper as fn(&[u8]) -> ResultMessage);
             m.insert(1, handle_input_wrapper as fn(&[u8]) -> ResultMessage);
-    		m.insert(2, crate::press_button as fn(&[u8]) -> ResultMessage);
+            m.insert(2, handle_handler_wrapper as fn(&[u8]) -> ResultMessage);
+    		m.insert(3, crate::press_button as fn(&[u8]) -> ResultMessage);
+
+            m
+        };
+        static ref HANDLERS: std::collections::HashMap<u16, fn(&[u8]) -> Vec<u8>> = {
+            #[allow(unused_mut)]
+            let mut m = std::collections::HashMap::new();
+    		m.insert(49152, crate::handler_value as fn(&[u8]) -> Vec<u8>);
 
             m
         };
@@ -297,5 +505,38 @@ pub mod authentic_execution {
 
     fn add_connection(conn_id : u16, conn : connection::Connection) {
         CONNECTIONS.lock().unwrap().insert(conn_id, conn);
+    }
+
+    fn add_output(out_id : u16, conn_id : u16) {
+        //TODO if entry not in map, add entry with Vec containing only conn_id
+        //TODO if entry in map, add conn_id to entry
+        let mut map = OUTPUTS.lock().unwrap();
+
+        match map.get_mut(&out_id) {
+            Some(vec)   => {
+                vec.push(conn_id);
+            },
+            None        => {
+                map.insert(out_id, vec!(conn_id));
+            }
+        }
+    }
+
+    fn get_connections_from_output(out_id : u16) -> Option<Vec<u16>> {
+        match OUTPUTS.lock().unwrap().get(&out_id) {
+            Some(val)   => Some(val.to_vec()),
+            None        => None
+        }
+    }
+
+    fn add_request(req_id : u16, conn_id : u16) {
+        REQUESTS.lock().unwrap().insert(req_id, conn_id);
+    }
+
+    fn get_connection_from_request(req_id : u16) -> Option<u16> {
+        match REQUESTS.lock().unwrap().get(&req_id) {
+            Some(val)   => Some(*val),
+            None        => None
+        }
     }
 }
