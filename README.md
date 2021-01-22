@@ -1,77 +1,47 @@
 # rust-sgx-gen
 
-Automatic code generator for Rust libraries, to setup all the necessary for an Authentic Execution module.
+Automatic code generator for SGX/native modules of the [Authentic Execution framework](https://github.com/gianlu33/authentic-execution).
 
-## How to use it
+## Installation
 
-Install the module by running `pip install <root_path>`
+```bash
+# Install rust-sgx-gen - you must be on the root of this repository
+pip install .
+```
 
-Run the generator through command line
+## Run
 
-- Run `rust-sgx-gen --help` for more information
+Generally, `rust-sgx-gen` is used within [`reactive-tools`](https://github.com/gianlu33/reactive-tools), so user intervention is not needed. To try it anyway:
+
+```bash
+# Check helper
+rust-sgx-gen -h
+
+# generate code and create output of a SGX module
+### <input_fldr>: input folder of the Rust module
+### <output_fldr>: output folder of the Rust module + the generated code
+### <module_id>: ID of the module
+### <reactive_port>: port used by the local Event Manager to listen for events
+### <result_json>: a result JSON file containing the description of the module
+### <runner>: either "sgx" or "native", depending on the nature of the module
+### <ra_sp_pubkey>: path to ra_sp public key (for Remote Attestation - only SGX)
+rust-sgx-gen -i <input_fldr> -o <output_fldr> -m <module_id> -e <reactive_port> -p <result_json> -r <runner> -s <ra_sp_pubkey>
+```
 
 ## General rules
 
 The input is a **Rust Cargo library**, created using the command `cargo new <name> --lib`
 
-- A `main.rs` should not exist
-- `[lib]` or `[[bin]]` sections in the `Cargo.toml` file should not exist
+- A `main.rs` **should not** exist
+- `[lib]` or `[[bin]]` sections in the `Cargo.toml` file **should not** exist
 
 - The developer is free to implement his own code (files, functions, data structures, external dependencies), but:
-  - He still has to respect the rules above
-  - He must be aware of the limitations of a SGX enclave (e.g. some std functions are not supported). Check [here](https://edp.fortanix.com/docs/concepts/rust-std/)
+  - They still have to respect the rules above
+  - They must be aware of the limitations of a SGX enclave (e.g. some std functions are not supported). Check [here](https://edp.fortanix.com/docs/concepts/rust-std/)
 
-## Define inputs, outputs, entry points
+## Define inputs, outputs, entry points, requests, handlers
 
-Inputs, outputs, entry points have to be defined in the `lib.rs` file (other files won't be checked for that). We use annotations (special comments) to define them.
-
-**Outputs**
-
-To define an output, it is sufficient to add the annotation somewhere in the file. The code is automatically generated.
-
-Example:
-
-```rust
-//@ sm_output(button_pressed)
-```
-
-Here, we define an output called `button_pressed`
-
-The signature of the output is:
-
-```rust
-pub fn <name>(data : &[u8]);
-```
-
-**Inputs**
-
-For inputs, we have to provide an implementation. The signature is the same as for outputs.
-
-Example:
-
-```rust
-//@ sm_input
-pub fn input1(data : &[u8]) {
-    button_pressed(data);
-}
-```
-
-**Entry points**
-
-Entry points emulate the `ECALLS` in `SGX SDK`. Can be called by an external entity.
-
-Example:
-
-```rust
-//@ sm_entry
-pub fn press_button(data : &[u8]) -> ResultMessage {
-    button_pressed(data);
-
-    authentic_execution::success(None)
-}
-```
-
-As you can see here, we must provide a return value, of type `ResultMessage` (see below).
+[Tutorial](https://github.com/gianlu33/authentic-execution/blob/master/docs/tutorial-develop-apps.md#develop-an-sgx-or-native-module)
 
 ## Helper functions
 
@@ -112,18 +82,32 @@ As described above, an entry point must return a `ResultMessage` element. A deve
     - The result code for `success` is always `ResultCode::Ok` (0)
   - `data` is an `Option<Vec<u8>>` which is an optional return value of the entry point.
 
- ## Call an entry point of a module
+ ## Call the entry point of a module
 
-To call an entry point of a module, we must know its id. All the identifiers are printed in the output JSON file (flag `-p` of `rust-sgx-gen`).
+### Using reactive-tools
+
+```bash
+# Call the entry point of a module (the arg flag is optional)
+### <config>: the output JSON file of a previous deploy command
+### <module_name>: the name of the module
+### <entry_name>: the name of the entry point
+### <args_ex>: byte array as hexadecimal string, e.g., "deadbeef"
+reactive-tools call --config <config> --module <module_name> --entry <entry_name> --arg <args_hex>
+```
+
+### Manual
+
+To manually call the entry point of a module, we must know its id. All the identifiers are printed in the output JSON file (flag `-p` of `rust-sgx-gen`).
 
 The general rule is that the entry points are enumerated in order of appearance in the `lib.rs` file, starting from 2.
 
 The first two IDs correspond to entry points used for Authentic Execution:
 
-- ID 0 is `set_key` entry point
-- ID 1 is `handle_input` entry point
+- ID 0 is `set_key`
+- ID 1 is `handle_input`
+- ID 2 is `handle_handler`
 
-### Call the module directly
+**Calling the module directly**
 
 The module must be loaded inside the same machine of the caller (because it listens for connections from the loopback interface).
 
@@ -138,7 +122,7 @@ Where:
 
 One can use the [`reactive_net`](https://github.com/gianlu33/rust-sgx-libs/tree/master/reactive_net) utility functions to send more easily a message (using `write_message`)
 
-### Call the module indirectly
+**Calling the module indirectly**
 
 We can call an entry point by sending the corresponding command to its Event Manager. We can connect to the EM from any machine connected to Internet.
 
