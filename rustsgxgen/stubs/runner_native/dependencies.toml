@@ -1,1 +1,2 @@
-
+[package]
+resolver = "2"

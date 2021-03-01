@@ -105,7 +105,7 @@ def __run(args, cargo):
         encoded_key = None
         if args.spkey:
             with open(args.spkey, "r") as f:
-                sp_key = f.read()
+                sp_key = f.read() + "\\0"
                 runner_file = runner_file.replace("__SP_VKEY_PEM__", sp_key)
         else:
             logging.warning("ra_sp public key not provided as input! RA won't work")
