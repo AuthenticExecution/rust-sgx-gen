@@ -1,6 +1,7 @@
+[package]
+resolver = "2"
+
 [dependencies]
 ra-common = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "4e8277293754b3c26d32ee76844749ef85bf96f9" }
 ra-enclave = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "4e8277293754b3c26d32ee76844749ef85bf96f9" }
 sgx-crypto = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "4e8277293754b3c26d32ee76844749ef85bf96f9" }
-
-resolver = "2"
