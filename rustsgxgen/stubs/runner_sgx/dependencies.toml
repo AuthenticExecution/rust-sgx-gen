@@ -1,6 +1,6 @@
 [dependencies]
-ra-common = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "7e2c26930d4a87aa040b3e1d5602c61fcd5145ee" }
-ra-enclave = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "7e2c26930d4a87aa040b3e1d5602c61fcd5145ee" }
+ra-common = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "4e8277293754b3c26d32ee76844749ef85bf96f9" }
+ra-enclave = { git = "https://github.com/ndokmai/rust-sgx-remote-attestation.git", rev = "4e8277293754b3c26d32ee76844749ef85bf96f9" }
 
 # Enclave must be patched with this SGX version of Ring
 [patch.crates-io]
