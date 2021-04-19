@@ -30,6 +30,8 @@ fn handle_client(mut stream: TcpStream) {
 
 
 fn remote_attestation() -> std::io::Result<String> {
+    info!("Waiting for attestation");
+
     let port = *EM_PORT + *MODULE_ID;
     let listener = TcpListener::bind(("0.0.0.0", port))?;
 
