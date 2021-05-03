@@ -2,8 +2,8 @@
 lazy_static = "1.4.0"
 base64 = "0.12.0"
 threadpool = "1.8.1"
-reactive_crypto = { git = "https://github.com/gianlu33/rust-sgx-libs.git" }
-reactive_net = { git = "https://github.com/gianlu33/rust-sgx-libs.git" }
+reactive_crypto = { git = "https://github.com/gianlu33/rust-sgx-libs.git", tag="fosdem-21" }
+reactive_net = { git = "https://github.com/gianlu33/rust-sgx-libs.git", tag="fosdem-21" }
 
 [features]
 
