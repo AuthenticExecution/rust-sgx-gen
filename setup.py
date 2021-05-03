@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="rust-sgx-gen",
-    version="0.1",
+    version="0.1.2",
     author="Gianluca Scopelliti",
     author_email="gianlu.1033@gmail.com",
     description="Rust code generator for the Authentic Execution framework",
