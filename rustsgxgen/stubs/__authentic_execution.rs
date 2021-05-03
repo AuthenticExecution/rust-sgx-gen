@@ -216,6 +216,14 @@ pub mod authentic_execution {
         success(None)
     }
 
+    pub fn attest_wrapper(data : &[u8]) -> ResultMessage  {
+        // The payload is: <TODO>
+        debug!("ENTRYPOINT: attest");
+
+        error!("attest entrypoint not implemented!");
+        failure(ResultCode::BadRequest, None)
+    }
+
     pub fn handle_input_wrapper(data : &[u8]) -> ResultMessage  {
         // The payload is: [index - payload]
         debug!("ENTRYPOINT: handle_input");
