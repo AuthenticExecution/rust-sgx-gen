@@ -2,8 +2,8 @@
 lazy_static = "1.4.0"
 base64 = "0.12.0"
 threadpool = "1.8.1"
-reactive_crypto = { git = "https://github.com/gianlu33/rust-sgx-libs.git", rev="d6a028a642dbbd757f6eba8e47f329745cf018eb" }
-reactive_net = { git = "https://github.com/gianlu33/rust-sgx-libs.git", rev="d6a028a642dbbd757f6eba8e47f329745cf018eb" }
+reactive_crypto = { git = "https://github.com/gianlu33/rust-sgx-libs.git", rev="4956ff3e395cce7890b063e6cab469d6ba8919d2" }
+reactive_net = { git = "https://github.com/gianlu33/rust-sgx-libs.git", rev="4956ff3e395cce7890b063e6cab469d6ba8919d2" }
 
 [features]
 
