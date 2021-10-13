@@ -6,5 +6,5 @@ reactive_crypto = { git = "https://github.com/gianlu33/rust-sgx-libs.git", rev="
 reactive_net = { git = "https://github.com/gianlu33/rust-sgx-libs.git", rev="4956ff3e395cce7890b063e6cab469d6ba8919d2" }
 
 [features]
-
 debug_prints = []
+measure_time = []
