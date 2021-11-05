@@ -18,7 +18,8 @@ jobs:
       run: |
         sudo apt update && sudo apt install pylint
         pip install -r requirements.txt
-        pylint . --rcfile .pylintrc
+        cd ..
+        pylint rust-sgx-gen --rcfile rust-sgx-gen/.pylintrc
     -
       name: publish
       if: ${{ github.event_name != 'pull_request' }}
