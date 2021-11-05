@@ -1,24 +1,24 @@
 from enum import Enum
 
+
 class Error(Exception):
     pass
 
 
 class Runner(Enum):
-    SGX             = 1
-    NATIVE          = 2
+    SGX = 1
+    NATIVE = 2
 
     @staticmethod
-    def from_str(str):
-        lower_str = str.lower()
+    def from_str(name):
+        lower_str = name.lower()
 
         if lower_str == "sgx":
             return Runner.SGX
         if lower_str == "native":
             return Runner.NATIVE
 
-        raise Error("No matching runner for {}".format(str))
-
+        raise Error("No matching runner for {}".format(name))
 
     def to_str(self):
         if self == Runner.SGX:
@@ -26,6 +26,7 @@ class Runner(Enum):
         if self == Runner.NATIVE:
             return "runner_native"
 
+        raise Error("No to_str for some Runners")
 
     def has_hardcoded_key(self):
         if self == Runner.NATIVE:

@@ -3,9 +3,12 @@ import setuptools
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+with open("requirements.txt", "r") as f:
+    requirements = f.readlines()
+
 setuptools.setup(
     name="rust-sgx-gen",
-    version="0.1.6.1",
+    version="0.2",
     author="Gianluca Scopelliti",
     author_email="gianlu.1033@gmail.com",
     description="Rust code generator for the Authentic Execution framework",
@@ -13,7 +16,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/gianlu33/rust-sgx-gen",
     packages=setuptools.find_packages(),
-    install_requires=['toml==0.10.2', 'colorlog==4.6.2'],
+    install_requires=requirements,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

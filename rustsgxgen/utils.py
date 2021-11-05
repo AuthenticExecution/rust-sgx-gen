@@ -1,20 +1,20 @@
 import os
 import logging
-import toml
 import re
 import subprocess
 import json
-import distutils
 from distutils import dir_util
+import toml
 
 from . import conf
+
 
 class Error(Exception):
     pass
 
 
-def _prepare_output_dir(input, output):
-    dir_util.copy_tree(input, output)
+def _prepare_output_dir(input_d, output_d):
+    dir_util.copy_tree(input_d, output_d)
 
 
 def _check_input_module(path):
@@ -24,7 +24,8 @@ def _check_input_module(path):
     cargo = os.path.join(path, "Cargo.toml")
 
     # Check if the path is a valid Cargo project
-    retval = subprocess.call(["cargo",  "verify-project", "--manifest-path", cargo], stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
+    retval = subprocess.call(["cargo", "verify-project", "--manifest-path", cargo],
+                             stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
 
     if retval != 0:
         raise Error("The input path is not a valid Cargo project!")
@@ -48,7 +49,7 @@ def _check_input_module(path):
 
 
 def _parse_annotations(file):
-    #logging.debug(annotation_file)
+    # logging.debug(annotation_file)
 
     with open(file, "r") as f:
         content = f.read()
@@ -88,7 +89,7 @@ def __parse(content, regex, start_index):
     p = re.compile(regex, re.MULTILINE | re.ASCII)
     results = p.findall(content)
 
-    return { v : i for (i, v) in enumerate(results, start_index) }
+    return {v: i for (i, v) in enumerate(results, start_index)}
 
 
 def __parse_inject(content, stub, regex, start_index):
@@ -104,27 +105,29 @@ def __parse_inject(content, stub, regex, start_index):
     results = p.finditer(content)
 
     for result in results:
-        id = start_index + i
+        res_id = start_index + i
         fname = result.group(1)
         end = result.end()
         #logging.debug("fname: {} end: {}".format(fname, end))
         pos = end + cnt
-        inj_fn = fn.format(name=fname, id=id)
+        inj_fn = fn.format(name=fname, id=res_id)
 
         content = content[:pos] + inj_fn + content[pos:]
         cnt += len(inj_fn)
 
-        res_dict[fname] = id
+        res_dict[fname] = res_id
         i += 1
 
     return content, res_dict
 
 
-def _write_module_info(file, name, id, data, key=None):
+def _write_module_info(file, name, module_id, data, key=None):
     if key is not None:
-        module_info = __helper_write_indexes([(name, "name"), (id, "id"), (key, "key")])
+        module_info = __helper_write_indexes(
+            [(name, "name"), (module_id, "id"), (key, "key")])
     else:
-        module_info = __helper_write_indexes([(name, "name"), (id, "id")])
+        module_info = __helper_write_indexes(
+            [(name, "name"), (module_id, "id")])
 
     content = {**module_info, **data}
 
@@ -158,7 +161,8 @@ def _add_fields(dest, src):
 
         for key in src[section].keys():
             if key in dest[section]:
-                logging.warn("{} {} already in destination cargo file, overwriting".format(section, key))
+                logging.warning(
+                    "{} {} already in destination cargo file, overwriting".format(section, key))
 
             dest[section][key] = src[section][key]
 

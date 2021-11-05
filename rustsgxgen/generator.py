@@ -1,13 +1,14 @@
 import logging
 import os
+import sys
 import re
-import toml
 import base64
+import toml
 
 from . import conf
 from .utils import _parse_annotations, _write_module_info, _prepare_output_dir, \
-                                    _check_input_module, _copy_main, _add_fields, \
-                                    _generate_key
+    _check_input_module, _copy_main, _add_fields, \
+    _generate_key
 from .initialization import _set_parser, _set_logging
 
 
@@ -16,9 +17,9 @@ def __run(args, cargo):
     module_name = cargo["package"]["name"]
 
     ## lib.rs file ##
-    ## In this section, we update lib.rs:
-    ##      - parse the annotations (inputs, outputs, entry points)
-    ##      - add imports (for authentic execution functions and constants)
+    # In this section, we update lib.rs:
+    # - parse the annotations (inputs, outputs, entry points)
+    # - add imports (for authentic execution functions and constants)
 
     lib_file = os.path.join(out_src, "lib.rs")
 
@@ -40,9 +41,9 @@ def __run(args, cargo):
         f.write(complete_lib)
 
     ## Authentic Execution file ##
-    ## In this section, we add to the project all the needed for authentic execution
-    ## we also need to update some data structures with the information retrieved
-    ## before
+    # In this section, we add to the project all the needed for authentic execution
+    # we also need to update some data structures with the information retrieved
+    # before
 
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_CONSTANTS), "r") as f:
         constants = f.read()
@@ -51,23 +52,26 @@ def __run(args, cargo):
     # be called given their ID
     inputs = data["inputs"]
     inputs_fn = ""
-    for input in inputs:
-        inputs_fn += conf.RUST_INSERT_INPUT.format(id=inputs[input], name=input)
+    for _input in inputs:
+        inputs_fn += conf.RUST_INSERT_INPUT.format(
+            id=inputs[_input], name=_input)
 
     entrypoints = data["entrypoints"]
     entrypoints_fn = ""
     for entry in entrypoints:
-        entrypoints_fn += conf.RUST_INSERT_ENTRY.format(id=entrypoints[entry], name=entry)
+        entrypoints_fn += conf.RUST_INSERT_ENTRY.format(
+            id=entrypoints[entry], name=entry)
 
     handlers = data["handlers"]
     handlers_fn = ""
     for handler in handlers:
-        handlers_fn += conf.RUST_INSERT_HANDLER.format(id=handlers[handler], name=handler)
+        handlers_fn += conf.RUST_INSERT_HANDLER.format(
+            id=handlers[handler], name=handler)
 
     # format constants with module's info
     constants = constants.format(id=args.moduleid, em_port=args.emport,
-                    name=module_name, inputs=inputs_fn,
-                    entrypoints=entrypoints_fn, handlers=handlers_fn)
+                                 name=module_name, inputs=inputs_fn,
+                                 entrypoints=entrypoints_fn, handlers=handlers_fn)
 
     # add constants to authentic_execution file, add the file to project
     with open(os.path.join(conf.STUBS_FOLDER, conf.STUB_AUTH_EXEC), "r") as f:
@@ -79,8 +83,8 @@ def __run(args, cargo):
         f.write(auth_exec)
 
     ## Main and other files ##
-    ## Here, we will add the logic for main(): the project will not be a Cargo lib
-    ## anymore, but an executable
+    # Here, we will add the logic for main(): the project will not be a Cargo lib
+    # anymore, but an executable
 
     _copy_main(out_src, cargo)
 
@@ -108,7 +112,8 @@ def __run(args, cargo):
                 sp_key = f.read() + "\\0"
                 runner_file = runner_file.replace("__SP_VKEY_PEM__", sp_key)
         else:
-            logging.warning("ra_sp public key not provided as input! RA won't work")
+            logging.warning(
+                "ra_sp public key not provided as input! RA won't work")
 
     with open(os.path.join(out_src, conf.STUB_RUNNER_RUN), "w") as f:
         f.write(runner_file)
@@ -117,7 +122,8 @@ def __run(args, cargo):
 
     # general dependencies (common to all runners)
     try:
-        common_deps = toml.load(os.path.join(conf.STUBS_FOLDER, conf.CARGO_DEPENDENCIES))
+        common_deps = toml.load(os.path.join(
+            conf.STUBS_FOLDER, conf.CARGO_DEPENDENCIES))
         _add_fields(cargo, common_deps)
     except Exception as e:
         logging.error("Common deps file not found")
@@ -125,10 +131,11 @@ def __run(args, cargo):
 
     # runner dependencies
     try:
-        runner_deps = toml.load(os.path.join(runner_folder, conf.STUB_RUNNER_DEPS))
+        runner_deps = toml.load(os.path.join(
+            runner_folder, conf.STUB_RUNNER_DEPS))
         _add_fields(cargo, runner_deps)
     except Exception as e:
-        logging.warn("Runner dependencies file not found")
+        logging.warning("Runner dependencies file not found")
 
     # write to cargo
     with open(os.path.join(args.output, "Cargo.toml"), "w") as f:
@@ -136,7 +143,8 @@ def __run(args, cargo):
 
     # write module info to output file (if specified)
     if args.print:
-        _write_module_info(args.print, module_name, args.moduleid, data, encoded_key)
+        _write_module_info(args.print, module_name,
+                           args.moduleid, data, encoded_key)
 
     logging.debug("Done")
 
@@ -159,7 +167,7 @@ def generate(args):
 
     except Exception as e:
         logging.error(e)
-        exit(1)
+        sys.exit(1)
 
 
 def __main():

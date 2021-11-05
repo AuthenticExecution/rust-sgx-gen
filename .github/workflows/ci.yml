@@ -5,6 +5,7 @@ on:
       - main
       - master
   workflow_dispatch: # Allow manual triggering
+  pull_request:
 
 jobs:
   build:
@@ -13,5 +14,12 @@ jobs:
     -
       uses: actions/checkout@master
     -
+      name: code-check
+      run: |
+        sudo apt update && sudo apt install pylint
+        pip install -r requirements.txt
+        pylint . --rcfile .pylintrc
+    -
       name: publish
+      if: ${{ github.event_name != 'pull_request' }}
       run: make upload PYPI_PASSWORD=${{ secrets.PYPI_TOKEN }}
