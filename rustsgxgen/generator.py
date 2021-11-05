@@ -15,7 +15,6 @@ from .initialization import _set_parser, _set_logging
 def __run(args, cargo):
     out_src = os.path.join(args.output, "src")
     module_name = cargo["package"]["name"]
-    print(stupidthing)
 
     ## lib.rs file ##
     # In this section, we update lib.rs:
