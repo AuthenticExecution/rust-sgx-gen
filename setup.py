@@ -8,19 +8,19 @@ with open("requirements.txt", "r") as f:
 
 setuptools.setup(
     name="rust-sgx-gen",
-    version="0.2",
+    version="0.2.1",
     author="Gianluca Scopelliti",
     author_email="gianlu.1033@gmail.com",
     description="Rust code generator for the Authentic Execution framework",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/gianlu33/rust-sgx-gen",
+    url="https://github.com/AuthenticExecution/rust-sgx-gen",
     packages=setuptools.find_packages(),
     install_requires=requirements,
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-        "Operating System :: OS Independent",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX :: Linux",
     ],
     python_requires='>=3.6',
     entry_points={
