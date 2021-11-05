@@ -1,0 +1,17 @@
+name: Pypi
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      uses: actions/checkout@master
+    -
+      name: publish
+      run: make upload PYPI_PASSWORD=${{ secrets.PYPI_TOKEN }}
