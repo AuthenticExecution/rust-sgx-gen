@@ -21,6 +21,14 @@ jobs:
         cd ..
         pylint rust-sgx-gen --rcfile rust-sgx-gen/.pylintrc
     -
+      name: test
+      run: |
+        pip install rust-sgx-gen/
+        cd rust-sgx-gen/example
+        rust-sgx-gen -i input -o test -m 1 -e 5000 -r native
+        cd test
+        cargo check
+    -
       name: publish
       if: ${{ github.event_name != 'pull_request' }}
       run: make upload PYPI_PASSWORD=${{ secrets.PYPI_TOKEN }}
