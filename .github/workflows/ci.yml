@@ -23,8 +23,8 @@ jobs:
     -
       name: test
       run: |
-        pip install rust-sgx-gen/
-        cd rust-sgx-gen/example
+        pip install .
+        cd example
         rust-sgx-gen -i input -o test -m 1 -e 5000 -r native
         cd test
         cargo check
