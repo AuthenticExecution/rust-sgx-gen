@@ -229,7 +229,7 @@ pub mod authentic_execution {
         success(None)
     }
 
-    pub fn attest_wrapper(data : &[u8]) -> ResultMessage  {
+    pub fn attest_wrapper(_data : &[u8]) -> ResultMessage  {
         // The payload is: <TODO>
         debug!("ENTRYPOINT: attest");
 
