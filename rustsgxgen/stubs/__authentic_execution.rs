@@ -192,6 +192,7 @@ pub mod authentic_execution {
         let mut ad = vec!(enc);
         ad.extend_from_slice(conn_id);
         ad.extend_from_slice(index);
+        //TODO do not trust this nonce but keep an internal one
         ad.extend_from_slice(nonce);
 
         let decoded_key = match base64::decode(&*MODULE_KEY) {
@@ -346,6 +347,39 @@ pub mod authentic_execution {
         measure_time("handle_handler_after_2nd_encryption");
 
         success(Some(response))
+    }
+
+    pub fn exit_wrapper(data : &[u8]) -> ResultMessage  {
+        // The payload is: [nonce - cipher]
+        debug!("ENTRYPOINT: exit");
+
+        if data.len() < 2 {
+            return failure(ResultCode::IllegalPayload, None)
+        }
+
+        exit(&data[0..2], &data[2..])
+    }
+
+    fn exit(nonce : &[u8], cipher : &[u8]) -> ResultMessage {
+        // The tag is included in the cipher
+        
+        //TODO do not trust this nonce but keep an internal one
+        let mut ad = vec!();
+        ad.extend_from_slice(nonce);
+
+        let decoded_key = match base64::decode(&*MODULE_KEY) {
+            Ok(k)   => k,
+            Err(_)  => return failure(ResultCode::InternalError, None)
+        };
+
+        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, &ad, &Encryption::Aes) {
+            return failure(ResultCode::CryptoError, None)
+        };
+
+        // exit
+        std::process::exit(0);
+
+        success(None)
     }
 
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
