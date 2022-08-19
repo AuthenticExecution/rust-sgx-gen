@@ -31,8 +31,8 @@ KEY_LENGTH = 16
 
 
 # Starting entrypoint index
-# 0 is set_key, 1 is attest, 2 is handle_input, 3 is handle_handler
-START_ENTRY_INDEX = 4
+# 0 is set_key, 1 is attest, 2 is exit, 3 is handle_input, 4 is handle_handler
+START_ENTRY_INDEX = 5
 # Starting indexes of inputs, outputs, requests and handlers
 # They need to have different indexes, because the `index` field in Connection does
 # not distinguish between them. If the same index is used for different types, bad
