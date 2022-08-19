@@ -3,13 +3,15 @@ pub mod authentic_execution {
     extern crate reactive_crypto;
     extern crate reactive_net;
 
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;
     use std::net::TcpStream;
 
     use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage, EntrypointID};
     use reactive_crypto::Encryption;
     use crate::__run::MODULE_KEY;
+    #[cfg(feature = "measure_time")]
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Debug)]
     pub enum Error {
@@ -142,6 +144,17 @@ pub mod authentic_execution {
         }};
     }
 
+    #[cfg(feature = "measure_time")]
+    pub fn measure_time(msg : &str) {
+        match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(d)   => info!(&format!("{}: {} us", msg, d.as_micros())),
+            Err(_)  => info!(&format!("{}: ERROR", msg))
+        }
+    }
+
+    #[cfg(not(feature = "measure_time"))]
+    pub fn measure_time(_msg : &str) {}
+
     /// This is the only interface to the software module from outside
     /// Each request has to be sent to this function
     #[allow(dead_code)]
@@ -179,6 +192,7 @@ pub mod authentic_execution {
         let mut ad = vec!(enc);
         ad.extend_from_slice(conn_id);
         ad.extend_from_slice(index);
+        //TODO do not trust this nonce but keep an internal one
         ad.extend_from_slice(nonce);
 
         let decoded_key = match base64::decode(&*MODULE_KEY) {
@@ -216,6 +230,14 @@ pub mod authentic_execution {
         success(None)
     }
 
+    pub fn attest_wrapper(_data : &[u8]) -> ResultMessage  {
+        // The payload is: <TODO>
+        debug!("ENTRYPOINT: attest");
+
+        error!("attest entrypoint not implemented!");
+        failure(ResultCode::BadRequest, None)
+    }
+
     pub fn handle_input_wrapper(data : &[u8]) -> ResultMessage  {
         // The payload is: [index - payload]
         debug!("ENTRYPOINT: handle_input");
@@ -236,6 +258,8 @@ pub mod authentic_execution {
             None => return failure(ResultCode::BadRequest, None)
         };
 
+        measure_time("handle_input_before_decryption");
+
         let nonce = conn.get_nonce();
         let data = match reactive_crypto::decrypt(payload, &conn.get_key(), &u16_to_data(nonce), &conn.get_encryption()) {
            Ok(d) => d,
@@ -246,12 +270,16 @@ pub mod authentic_execution {
         let index = &conn.get_index();
         drop(map); // release map as soon as we don't need it anymore
 
+        measure_time("handle_input_after_decryption");
+
         let handler = match INPUTS.get(index) {
             Some(h) => h,
             None => return failure(ResultCode::BadRequest, None)
         };
 
         handler(&data);
+
+        measure_time("handle_input_after_handler");
 
         success(None)
     }
@@ -277,6 +305,8 @@ pub mod authentic_execution {
             None => return failure(ResultCode::BadRequest, None)
         };
 
+        measure_time("handle_handler_before_1st_decryption");
+
         let nonce = conn.get_nonce();
         let key = conn.get_key();
         let encryption = conn.get_encryption();
@@ -295,6 +325,8 @@ pub mod authentic_execution {
         // release lock of map, so that it can be used by other threads
         drop(map);
 
+        measure_time("handle_handler_after_1st_decryption");
+
         // execute handler
         let handler = match HANDLERS.get(&index) {
             Some(h) => h,
@@ -303,6 +335,8 @@ pub mod authentic_execution {
 
         let result = handler(&data);
 
+        measure_time("handle_handler_after_handler");
+
         // encrypt response
         let response = match reactive_crypto::encrypt(&result, &key,
                                         &u16_to_data(nonce+1), &encryption) {
@@ -310,7 +344,40 @@ pub mod authentic_execution {
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
 
+        measure_time("handle_handler_after_2nd_encryption");
+
         success(Some(response))
+    }
+
+    pub fn exit_wrapper(data : &[u8]) -> ResultMessage  {
+        // The payload is: [nonce - cipher]
+        debug!("ENTRYPOINT: exit");
+
+        if data.len() < 2 {
+            return failure(ResultCode::IllegalPayload, None)
+        }
+
+        exit(&data[0..2], &data[2..])
+    }
+
+    fn exit(nonce : &[u8], cipher : &[u8]) -> ResultMessage {
+        // The tag is included in the cipher
+        
+        //TODO do not trust this nonce but keep an internal one
+        let mut ad = vec!();
+        ad.extend_from_slice(nonce);
+
+        let decoded_key = match base64::decode(&*MODULE_KEY) {
+            Ok(k)   => k,
+            Err(_)  => return failure(ResultCode::InternalError, None)
+        };
+
+        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, &ad, &Encryption::Aes) {
+            return failure(ResultCode::CryptoError, None)
+        };
+
+        // exit
+        std::process::exit(0);
     }
 
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
@@ -319,7 +386,6 @@ pub mod authentic_execution {
             Some(vec)       => vec,
             None            => return // no connections associated to the output
         };
-
 
         for conn_id in connections {
             let mut map = CONNECTIONS.lock().unwrap();
@@ -332,6 +398,8 @@ pub mod authentic_execution {
                 }
             };
 
+            measure_time("handle_output_before_encryption");
+
             let nonce = conn.get_nonce();
             let payload = match reactive_crypto::encrypt(data, &conn.get_key(),
                                             &u16_to_data(nonce), &conn.get_encryption()) {
@@ -342,11 +410,15 @@ pub mod authentic_execution {
                }
             };
 
+            measure_time("handle_output_after_encryption");
+
             conn.increment_nonce();
             let func = || drop(map);
             if let Err(e) = send_to_em(EntrypointID::HandleInput as u16, conn_id, payload, false, func) {
                 error!(&format!("{}", e));
             }
+
+            measure_time("handle_output_after_dispatch");
         }
     }
 
@@ -365,6 +437,8 @@ pub mod authentic_execution {
             None        => return Err(Error::InternalError) // it shouldn't happen
         };
 
+        measure_time("handle_request_before_1st_encryption");
+
         // encrypt payload
         let nonce = conn.get_nonce();
         let key = conn.get_key();
@@ -382,6 +456,8 @@ pub mod authentic_execution {
         conn.increment_nonce();
         conn.increment_nonce();
 
+        measure_time("handle_request_after_1st_encryption");
+
         // send payload:
         // drop map only after the message is sent to the EM.
         // to avoid out-of-order events in parallel executions of the same request
@@ -391,6 +467,8 @@ pub mod authentic_execution {
             Some(r)     => r,
             None        => return Err(Error::InternalError) //it should never happen
         };
+
+        measure_time("handle_request_after_response_received");
 
         // Check response
         let resp_body = match response.get_code() {
@@ -409,6 +487,8 @@ pub mod authentic_execution {
            Ok(d)    => d,
            Err(_)   => return Err(Error::CryptoError)
         };
+
+        measure_time("handle_request_after_2nd_decryption");
 
         Ok(data)
     }
@@ -463,7 +543,7 @@ pub mod authentic_execution {
         static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
             Mutex::new(HashMap::new())
         };
-        static ref OUTPUTS: Mutex<HashMap<u16, Vec<u16>>> = {
+        static ref OUTPUTS: Mutex<HashMap<u16, HashSet<u16>>> = {
             Mutex::new(HashMap::new())
         };
         static ref REQUESTS: Mutex<HashMap<u16, u16>> = {
@@ -487,9 +567,11 @@ pub mod authentic_execution {
         static ref ENTRYPOINTS: std::collections::HashMap<u16, fn(&[u8]) -> ResultMessage> = {
             let mut m = std::collections::HashMap::new();
             m.insert(0, set_key_wrapper as fn(&[u8]) -> ResultMessage);
-            m.insert(1, handle_input_wrapper as fn(&[u8]) -> ResultMessage);
-            m.insert(2, handle_handler_wrapper as fn(&[u8]) -> ResultMessage);
-    		m.insert(3, crate::press_button as fn(&[u8]) -> ResultMessage);
+            m.insert(1, attest_wrapper as fn(&[u8]) -> ResultMessage);
+            m.insert(2, exit_wrapper as fn(&[u8]) -> ResultMessage);
+            m.insert(3, handle_input_wrapper as fn(&[u8]) -> ResultMessage);
+            m.insert(4, handle_handler_wrapper as fn(&[u8]) -> ResultMessage);
+    		m.insert(4, crate::press_button as fn(&[u8]) -> ResultMessage);
 
             m
         };
@@ -508,23 +590,23 @@ pub mod authentic_execution {
     }
 
     fn add_output(out_id : u16, conn_id : u16) {
-        //TODO if entry not in map, add entry with Vec containing only conn_id
-        //TODO if entry in map, add conn_id to entry
         let mut map = OUTPUTS.lock().unwrap();
 
         match map.get_mut(&out_id) {
-            Some(vec)   => {
-                vec.push(conn_id);
+            Some(set)   => {
+                set.insert(conn_id);
             },
             None        => {
-                map.insert(out_id, vec!(conn_id));
+                let mut set : HashSet<u16> = HashSet::with_capacity(1);
+                set.insert(conn_id);
+                map.insert(out_id, set);
             }
         }
     }
 
-    fn get_connections_from_output(out_id : u16) -> Option<Vec<u16>> {
+    fn get_connections_from_output(out_id : u16) -> Option<HashSet<u16>> {
         match OUTPUTS.lock().unwrap().get(&out_id) {
-            Some(val)   => Some(val.to_vec()),
+            Some(val)   => Some(val.clone()),
             None        => None
         }
     }

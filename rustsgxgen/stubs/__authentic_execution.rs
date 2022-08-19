@@ -3,7 +3,7 @@ pub mod authentic_execution {
     extern crate reactive_crypto;
     extern crate reactive_net;
 
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;
     use std::net::TcpStream;
 
@@ -378,8 +378,6 @@ pub mod authentic_execution {
 
         // exit
         std::process::exit(0);
-
-        success(None)
     }
 
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
@@ -545,7 +543,7 @@ pub mod authentic_execution {
         static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
             Mutex::new(HashMap::new())
         };
-        static ref OUTPUTS: Mutex<HashMap<u16, Vec<u16>>> = {
+        static ref OUTPUTS: Mutex<HashMap<u16, HashSet<u16>>> = {
             Mutex::new(HashMap::new())
         };
         static ref REQUESTS: Mutex<HashMap<u16, u16>> = {
@@ -564,18 +562,20 @@ pub mod authentic_execution {
         let mut map = OUTPUTS.lock().unwrap();
 
         match map.get_mut(&out_id) {
-            Some(vec)   => {
-                vec.push(conn_id);
+            Some(set)   => {
+                set.insert(conn_id);
             },
             None        => {
-                map.insert(out_id, vec!(conn_id));
+                let mut set : HashSet<u16> = HashSet::with_capacity(1);
+                set.insert(conn_id);
+                map.insert(out_id, set);
             }
         }
     }
 
-    fn get_connections_from_output(out_id : u16) -> Option<Vec<u16>> {
+    fn get_connections_from_output(out_id : u16) -> Option<HashSet<u16>> {
         match OUTPUTS.lock().unwrap().get(&out_id) {
-            Some(val)   => Some(val.to_vec()),
+            Some(val)   => Some(val.clone()),
             None        => None
         }
     }
