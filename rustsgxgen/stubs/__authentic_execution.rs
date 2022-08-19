@@ -3,7 +3,7 @@ pub mod authentic_execution {
     extern crate reactive_crypto;
     extern crate reactive_net;
 
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;
     use std::net::TcpStream;
 
@@ -192,6 +192,7 @@ pub mod authentic_execution {
         let mut ad = vec!(enc);
         ad.extend_from_slice(conn_id);
         ad.extend_from_slice(index);
+        //TODO do not trust this nonce but keep an internal one
         ad.extend_from_slice(nonce);
 
         let decoded_key = match base64::decode(&*MODULE_KEY) {
@@ -346,6 +347,37 @@ pub mod authentic_execution {
         measure_time("handle_handler_after_2nd_encryption");
 
         success(Some(response))
+    }
+
+    pub fn exit_wrapper(data : &[u8]) -> ResultMessage  {
+        // The payload is: [nonce - cipher]
+        debug!("ENTRYPOINT: exit");
+
+        if data.len() < 2 {
+            return failure(ResultCode::IllegalPayload, None)
+        }
+
+        exit(&data[0..2], &data[2..])
+    }
+
+    fn exit(nonce : &[u8], cipher : &[u8]) -> ResultMessage {
+        // The tag is included in the cipher
+        
+        //TODO do not trust this nonce but keep an internal one
+        let mut ad = vec!();
+        ad.extend_from_slice(nonce);
+
+        let decoded_key = match base64::decode(&*MODULE_KEY) {
+            Ok(k)   => k,
+            Err(_)  => return failure(ResultCode::InternalError, None)
+        };
+
+        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, &ad, &Encryption::Aes) {
+            return failure(ResultCode::CryptoError, None)
+        };
+
+        // exit
+        std::process::exit(0);
     }
 
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
@@ -511,7 +543,7 @@ pub mod authentic_execution {
         static ref CONNECTIONS: Mutex<HashMap<u16, connection::Connection>> = {
             Mutex::new(HashMap::new())
         };
-        static ref OUTPUTS: Mutex<HashMap<u16, Vec<u16>>> = {
+        static ref OUTPUTS: Mutex<HashMap<u16, HashSet<u16>>> = {
             Mutex::new(HashMap::new())
         };
         static ref REQUESTS: Mutex<HashMap<u16, u16>> = {
@@ -530,18 +562,20 @@ pub mod authentic_execution {
         let mut map = OUTPUTS.lock().unwrap();
 
         match map.get_mut(&out_id) {
-            Some(vec)   => {
-                vec.push(conn_id);
+            Some(set)   => {
+                set.insert(conn_id);
             },
             None        => {
-                map.insert(out_id, vec!(conn_id));
+                let mut set : HashSet<u16> = HashSet::with_capacity(1);
+                set.insert(conn_id);
+                map.insert(out_id, set);
             }
         }
     }
 
-    fn get_connections_from_output(out_id : u16) -> Option<Vec<u16>> {
+    fn get_connections_from_output(out_id : u16) -> Option<HashSet<u16>> {
         match OUTPUTS.lock().unwrap().get(&out_id) {
-            Some(val)   => Some(val.to_vec()),
+            Some(val)   => Some(val.clone()),
             None        => None
         }
     }
