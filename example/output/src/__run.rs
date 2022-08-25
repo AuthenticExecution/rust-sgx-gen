@@ -4,7 +4,7 @@ use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MO
 use threadpool::ThreadPool;
 
 lazy_static! {
-    pub static ref MODULE_KEY: String = String::from("vcSwlV81nE1DaO0L1YLltw==");
+    pub static ref MODULE_KEY: String = String::from("U8q/U78hGcRRfrIhEus3QQ==");
 }
 
 

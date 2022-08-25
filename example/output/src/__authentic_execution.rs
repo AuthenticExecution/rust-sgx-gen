@@ -189,6 +189,11 @@ pub mod authentic_execution {
     fn set_key(enc : u8, conn_id : &[u8], index : &[u8], nonce : &[u8], cipher : &[u8]) -> ResultMessage {
         // The tag is included in the cipher
 
+        let nonce_u16 = data_to_u16(nonce);
+        if !check_nonce(nonce_u16) {
+            return failure(ResultCode::IllegalPayload, None)
+        }
+
         let mut ad = vec!(enc);
         ad.extend_from_slice(conn_id);
         ad.extend_from_slice(index);
@@ -204,6 +209,8 @@ pub mod authentic_execution {
            Ok(k)    => k,
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
+
+        increment_nonce();
 
         let enc_type = match Encryption::from_u8(enc) {
             Some(e) => e,
@@ -362,23 +369,26 @@ pub mod authentic_execution {
 
     fn disable(nonce : &[u8], cipher : &[u8]) -> ResultMessage {
         // The tag is included in the cipher
-        
-        //TODO do not trust this nonce but keep an internal one
-        let mut ad = vec!();
-        ad.extend_from_slice(nonce);
+
+        let nonce_u16 = data_to_u16(nonce);
+        if !check_nonce(nonce_u16) {
+            return failure(ResultCode::IllegalPayload, None)
+        }
 
         let decoded_key = match base64::decode(&*MODULE_KEY) {
             Ok(k)   => k,
             Err(_)  => return failure(ResultCode::InternalError, None)
         };
 
-        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, &ad, &Encryption::Aes) {
+        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, &nonce, &Encryption::Aes) {
             return failure(ResultCode::CryptoError, None)
         };
 
+        increment_nonce();
+
         // delete all connections, making the module disabled in practice
         delete_all_connections();
-        
+
         success(None)
     }
 
@@ -551,6 +561,9 @@ pub mod authentic_execution {
         static ref REQUESTS: Mutex<HashMap<u16, u16>> = {
             Mutex::new(HashMap::new())
         };
+        static ref NONCE: Mutex<u16> = {
+            Mutex::new(0)
+        };
     }
 
     // Constants: Module's key, ID, Inputs, Outputs
@@ -628,5 +641,14 @@ pub mod authentic_execution {
             Some(val)   => Some(*val),
             None        => None
         }
+    }
+
+    fn increment_nonce() {
+        let mut nonce_ref = NONCE.lock().unwrap();
+        *nonce_ref += 1;
+    }
+
+    fn check_nonce(nonce : u16) -> bool {
+        *NONCE.lock().unwrap() == nonce
     }
 }
