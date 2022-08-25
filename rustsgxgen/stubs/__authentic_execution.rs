@@ -349,18 +349,18 @@ pub mod authentic_execution {
         success(Some(response))
     }
 
-    pub fn exit_wrapper(data : &[u8]) -> ResultMessage  {
+    pub fn disable_wrapper(data : &[u8]) -> ResultMessage  {
         // The payload is: [nonce - cipher]
-        debug!("ENTRYPOINT: exit");
+        debug!("ENTRYPOINT: disable");
 
         if data.len() < 2 {
             return failure(ResultCode::IllegalPayload, None)
         }
 
-        exit(&data[0..2], &data[2..])
+        disable(&data[0..2], &data[2..])
     }
 
-    fn exit(nonce : &[u8], cipher : &[u8]) -> ResultMessage {
+    fn disable(nonce : &[u8], cipher : &[u8]) -> ResultMessage {
         // The tag is included in the cipher
         
         //TODO do not trust this nonce but keep an internal one
@@ -376,8 +376,10 @@ pub mod authentic_execution {
             return failure(ResultCode::CryptoError, None)
         };
 
-        // exit
-        std::process::exit(0);
+        // delete all connections, making the module disabled in practice
+        delete_all_connections();
+        
+        success(None)
     }
 
     #[allow(dead_code)] // this is needed if we have no outputs to avoid warnings
@@ -556,6 +558,12 @@ pub mod authentic_execution {
 
     fn add_connection(conn_id : u16, conn : connection::Connection) {
         CONNECTIONS.lock().unwrap().insert(conn_id, conn);
+    }
+
+    fn delete_all_connections() {
+        CONNECTIONS.lock().unwrap().clear();
+        OUTPUTS.lock().unwrap().clear();
+        REQUESTS.lock().unwrap().clear();
     }
 
     fn add_output(out_id : u16, conn_id : u16) {

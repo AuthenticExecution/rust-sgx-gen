@@ -13,7 +13,7 @@
             let mut m = std::collections::HashMap::new();
             m.insert(0, set_key_wrapper as fn(&[u8]) -> ResultMessage);
             m.insert(1, attest_wrapper as fn(&[u8]) -> ResultMessage);
-            m.insert(2, exit_wrapper as fn(&[u8]) -> ResultMessage);
+            m.insert(2, disable_wrapper as fn(&[u8]) -> ResultMessage);
             m.insert(3, handle_input_wrapper as fn(&[u8]) -> ResultMessage);
             m.insert(4, handle_handler_wrapper as fn(&[u8]) -> ResultMessage);
     {entrypoints}
