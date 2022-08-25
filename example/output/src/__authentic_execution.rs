@@ -380,7 +380,7 @@ pub mod authentic_execution {
             Err(_)  => return failure(ResultCode::InternalError, None)
         };
 
-        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, &nonce, &Encryption::Aes) {
+        if let Err(_) = reactive_crypto::decrypt(cipher, &decoded_key, nonce, &Encryption::Aes) {
             return failure(ResultCode::CryptoError, None)
         };
 
