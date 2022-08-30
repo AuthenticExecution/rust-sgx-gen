@@ -52,21 +52,21 @@ START_HANDLER_INDEX = 49152
 REGEX_LAZY = "^\s*#\s*[\s*macro_use\s*]\s*extern\s*crate\s*lazy_static\s*;"
 
 REGEX_OUTPUT = ("^[ \t]*//@[ \t]*sm_output[ \t]*\([ \t]*"
-                "(?P<fname>_?[a-zA-Z]+[_a-zA-Z0-9]*)[ \t]*\)[ \t]*$")
+                "(?P<fname>[_a-zA-Z]+[_a-zA-Z0-9]*)[ \t]*\)[ \t]*$")
 
 REGEX_INPUT = ("^[ \t]*//@[ \t]*sm_input[ \t]*\n\s*pub\s+fn\s+"
-               "(?P<fname>_?[a-zA-Z]+[_a-zA-Z0-9]*)\s*\(\s*_?"
-               "[a-zA-Z]+[_a-zA-Z0-9]*\s*:\s*&\s*\[\s*u8\s*]\s*\)\s*\{")
+               "(?P<fname>[_a-zA-Z]+[_a-zA-Z0-9]*)\s*\(\s*"
+               "[_a-zA-Z]+[_a-zA-Z0-9]*\s*:\s*&\s*\[\s*u8\s*]\s*\)\s*\{")
 
 REGEX_ENTRY = ("^[ \t]*//@[ \t]*sm_entry[ \t]*\n\s*pub\s+fn\s+"
-               "(?P<fname>_?[a-zA-Z]+[_a-zA-Z0-9]*)\s*\(\s*_?"
-               "[a-zA-Z]+[_a-zA-Z0-9]*\s*:\s*&\s*\[\s*u8\s*]\s*\)\s*->\s*"
+               "(?P<fname>[_a-zA-Z]+[_a-zA-Z0-9]*)\s*\(\s*"
+               "[_a-zA-Z]+[_a-zA-Z0-9]*\s*:\s*&\s*\[\s*u8\s*]\s*\)\s*->\s*"
                "ResultMessage\s*\{")
 
-REGEX_REQUEST = ("^[ \t]*//@[ \t]*sm_request[ \t]*\([ \t]*(?P<fname>_?[a-zA-Z]+"
+REGEX_REQUEST = ("^[ \t]*//@[ \t]*sm_request[ \t]*\([ \t]*(?P<fname>[_a-zA-Z]+"
                  "[_a-zA-Z0-9]*)[ \t]*\)[ \t]*$")
 
 REGEX_HANDLER = ("^[ \t]*//@[ \t]*sm_handler[ \t]*\n\s*pub\s+fn\s+"
-                 "(?P<fname>_?[a-zA-Z]+[_a-zA-Z0-9]*)\s*\(\s*_?[a-zA-Z]+"
+                 "(?P<fname>[_a-zA-Z]+[_a-zA-Z0-9]*)\s*\(\s*[_a-zA-Z]+"
                  "[_a-zA-Z0-9]*\s*:\s*&\s*\[\s*u8\s*]\s*\)\s*->\s*"
                  "Vec\s*<\s*u8\s*>\s*\{")
