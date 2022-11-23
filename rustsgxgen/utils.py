@@ -162,7 +162,8 @@ def _add_fields(dest, src):
         for key in src[section].keys():
             if key in dest[section]:
                 logging.warning(
-                    "{} {} already in destination cargo file, overwriting".format(section, key))
+                    f"{section} {key} already in destination cargo file, overwriting"
+                )
 
             dest[section][key] = src[section][key]
 

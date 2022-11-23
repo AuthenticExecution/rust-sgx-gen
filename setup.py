@@ -8,7 +8,7 @@ with open("requirements.txt", "r") as f:
 
 setuptools.setup(
     name="rust-sgx-gen",
-    version="0.3.4",
+    version="0.3.5",
     author="Gianluca Scopelliti",
     author_email="gianlu.1033@gmail.com",
     description="Rust code generator for the Authentic Execution framework",

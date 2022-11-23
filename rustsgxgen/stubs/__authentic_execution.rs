@@ -10,7 +10,6 @@ pub mod authentic_execution {
     use reactive_net::{ResultCode, CommandCode, ResultMessage, CommandMessage, EntrypointID};
     use reactive_crypto::Encryption;
     use crate::__run::MODULE_KEY;
-    #[cfg(feature = "measure_time")]
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[derive(Debug)]
@@ -144,16 +143,29 @@ pub mod authentic_execution {
         }};
     }
 
-    #[cfg(feature = "measure_time")]
-    pub fn measure_time(msg : &str) {
+    #[allow(dead_code)]
+    pub fn measure_time_ms(msg : &str) {
         match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d)   => info!(&format!("{}: {} us", msg, d.as_micros())),
+            Ok(d)   => info!(&format!("{}: {} ms", msg, d.as_millis())),
             Err(_)  => info!(&format!("{}: ERROR", msg))
         }
     }
 
+    #[allow(dead_code)]
+    pub fn measure_time_us(msg : &str) {
+        match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(d)   => info!(&format!("{}: {} ms", msg, d.as_micros())),
+            Err(_)  => info!(&format!("{}: ERROR", msg))
+        }
+    }
+
+    #[cfg(feature = "measure_time")]
+    fn _measure_time(msg : &str) {
+        measure_time_us(msg);
+    }
+
     #[cfg(not(feature = "measure_time"))]
-    pub fn measure_time(_msg : &str) {}
+    fn _measure_time(_msg : &str) {}
 
     /// This is the only interface to the software module from outside
     /// Each request has to be sent to this function
@@ -265,7 +277,7 @@ pub mod authentic_execution {
             None => return failure(ResultCode::BadRequest, None)
         };
 
-        measure_time("handle_input_before_decryption");
+        _measure_time("handle_input_before_decryption");
 
         let nonce = conn.get_nonce();
         let data = match reactive_crypto::decrypt(payload, &conn.get_key(), &u16_to_data(nonce), &conn.get_encryption()) {
@@ -277,7 +289,7 @@ pub mod authentic_execution {
         let index = &conn.get_index();
         drop(map); // release map as soon as we don't need it anymore
 
-        measure_time("handle_input_after_decryption");
+        _measure_time("handle_input_after_decryption");
 
         let handler = match INPUTS.get(index) {
             Some(h) => h,
@@ -286,7 +298,7 @@ pub mod authentic_execution {
 
         handler(&data);
 
-        measure_time("handle_input_after_handler");
+        _measure_time("handle_input_after_handler");
 
         success(None)
     }
@@ -312,7 +324,7 @@ pub mod authentic_execution {
             None => return failure(ResultCode::BadRequest, None)
         };
 
-        measure_time("handle_handler_before_1st_decryption");
+        _measure_time("handle_handler_before_1st_decryption");
 
         let nonce = conn.get_nonce();
         let key = conn.get_key();
@@ -332,7 +344,7 @@ pub mod authentic_execution {
         // release lock of map, so that it can be used by other threads
         drop(map);
 
-        measure_time("handle_handler_after_1st_decryption");
+        _measure_time("handle_handler_after_1st_decryption");
 
         // execute handler
         let handler = match HANDLERS.get(&index) {
@@ -342,7 +354,7 @@ pub mod authentic_execution {
 
         let result = handler(&data);
 
-        measure_time("handle_handler_after_handler");
+        _measure_time("handle_handler_after_handler");
 
         // encrypt response
         let response = match reactive_crypto::encrypt(&result, &key,
@@ -351,7 +363,7 @@ pub mod authentic_execution {
            Err(_)   => return failure(ResultCode::CryptoError, None)
         };
 
-        measure_time("handle_handler_after_2nd_encryption");
+        _measure_time("handle_handler_after_2nd_encryption");
 
         success(Some(response))
     }
@@ -410,7 +422,7 @@ pub mod authentic_execution {
                 }
             };
 
-            measure_time("handle_output_before_encryption");
+            _measure_time("handle_output_before_encryption");
 
             let nonce = conn.get_nonce();
             let payload = match reactive_crypto::encrypt(data, &conn.get_key(),
@@ -422,7 +434,7 @@ pub mod authentic_execution {
                }
             };
 
-            measure_time("handle_output_after_encryption");
+            _measure_time("handle_output_after_encryption");
 
             conn.increment_nonce();
             let func = || drop(map);
@@ -430,7 +442,7 @@ pub mod authentic_execution {
                 error!(&format!("{}", e));
             }
 
-            measure_time("handle_output_after_dispatch");
+            _measure_time("handle_output_after_dispatch");
         }
     }
 
@@ -449,7 +461,7 @@ pub mod authentic_execution {
             None        => return Err(Error::InternalError) // it shouldn't happen
         };
 
-        measure_time("handle_request_before_1st_encryption");
+        _measure_time("handle_request_before_1st_encryption");
 
         // encrypt payload
         let nonce = conn.get_nonce();
@@ -468,7 +480,7 @@ pub mod authentic_execution {
         conn.increment_nonce();
         conn.increment_nonce();
 
-        measure_time("handle_request_after_1st_encryption");
+        _measure_time("handle_request_after_1st_encryption");
 
         // send payload:
         // drop map only after the message is sent to the EM.
@@ -480,7 +492,7 @@ pub mod authentic_execution {
             None        => return Err(Error::InternalError) //it should never happen
         };
 
-        measure_time("handle_request_after_response_received");
+        _measure_time("handle_request_after_response_received");
 
         // Check response
         let resp_body = match response.get_code() {
@@ -500,7 +512,7 @@ pub mod authentic_execution {
            Err(_)   => return Err(Error::CryptoError)
         };
 
-        measure_time("handle_request_after_2nd_decryption");
+        _measure_time("handle_request_after_2nd_decryption");
 
         Ok(data)
     }

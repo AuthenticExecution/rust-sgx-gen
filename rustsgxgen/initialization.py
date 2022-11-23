@@ -106,7 +106,7 @@ def __input_dir(arg):
 def __output_dir(arg):
     if not os.path.exists(arg):
         return arg
-    raise argparse.ArgumentTypeError("Output dir {} already exists".format(arg))
+    raise argparse.ArgumentTypeError(f"Output dir {arg} already exists")
 
 
 def __sp_key(arg):

@@ -134,7 +134,7 @@ def __run(args, cargo):
         runner_deps = toml.load(os.path.join(
             runner_folder, conf.STUB_RUNNER_DEPS))
         _add_fields(cargo, runner_deps)
-    except Exception as e:
+    except Exception:
         logging.warning("Runner dependencies file not found")
 
     # write to cargo

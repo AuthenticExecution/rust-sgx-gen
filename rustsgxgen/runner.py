@@ -18,7 +18,7 @@ class Runner(Enum):
         if lower_str == "native":
             return Runner.NATIVE
 
-        raise Error("No matching runner for {}".format(name))
+        raise Error(f"No matching runner for {name}")
 
     def to_str(self):
         if self == Runner.SGX:
