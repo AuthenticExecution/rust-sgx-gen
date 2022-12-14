@@ -154,7 +154,7 @@ pub mod authentic_execution {
     #[allow(dead_code)]
     pub fn measure_time_us(msg : &str) {
         match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d)   => info!(&format!("{}: {} ms", msg, d.as_micros())),
+            Ok(d)   => info!(&format!("{}: {} us", msg, d.as_micros())),
             Err(_)  => info!(&format!("{}: ERROR", msg))
         }
     }
