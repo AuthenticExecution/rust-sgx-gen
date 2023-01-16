@@ -115,8 +115,9 @@ pub mod authentic_execution {
     #[cfg(feature = "debug_prints")]
     #[macro_export]
     macro_rules! debug {
-        ($msg:expr) => {{
-                println!("[{}] DEBUG: {}", &*MODULE_NAME, $msg);
+        ($($args:expr),*) => {{
+            print!("[{}] DEBUG: ", &*MODULE_NAME);
+            println!($($args),*);
         }};
     }
     #[cfg(not(feature = "debug_prints"))]
@@ -126,36 +127,39 @@ pub mod authentic_execution {
     }
     #[macro_export]
     macro_rules! info {
-        ($msg:expr) => {{
-                println!("[{}] INFO: {}", &*MODULE_NAME, $msg);
-        }};
-    }
-    #[macro_export]
-    macro_rules! error {
-        ($msg:expr) => {{
-                eprintln!("[{}] ERROR: {}", &*MODULE_NAME, $msg);
+        ($($args:expr),*) => {{
+            print!("[{}] INFO: ", &*MODULE_NAME);
+            println!($($args),*);
         }};
     }
     #[macro_export]
     macro_rules! warning {
-        ($msg:expr) => {{
-                eprintln!("[{}] WARNING: {}", &*MODULE_NAME, $msg);
+        ($($args:expr),*) => {{
+            print!("[{}] WARNING: ", &*MODULE_NAME);
+            println!($($args),*);
+        }};
+    }
+    #[macro_export]
+    macro_rules! error {
+        ($($args:expr),*) => {{
+            print!("[{}] ERROR: ", &*MODULE_NAME);
+            println!($($args),*);
         }};
     }
 
     #[allow(dead_code)]
     pub fn measure_time_ms(msg : &str) {
         match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d)   => info!(&format!("{}: {} ms", msg, d.as_millis())),
-            Err(_)  => info!(&format!("{}: ERROR", msg))
+            Ok(d)   => info!("{}: {} ms", msg, d.as_millis()),
+            Err(_)  => info!("{}: ERROR", msg)
         }
     }
 
     #[allow(dead_code)]
     pub fn measure_time_us(msg : &str) {
         match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d)   => info!(&format!("{}: {} us", msg, d.as_micros())),
-            Err(_)  => info!(&format!("{}: ERROR", msg))
+            Ok(d)   => info!("{}: {} us", msg, d.as_micros()),
+            Err(_)  => info!("{}: ERROR", msg)
         }
     }
 
@@ -417,7 +421,7 @@ pub mod authentic_execution {
             let conn = match map.get_mut(&conn_id) {
                 Some(c)     => c,
                 None        => {
-                    error!(&format!("{}", Error::InternalError));
+                    error!("{}", Error::InternalError);
                     continue; // or break? Btw this SHOULD NEVER happen
                 }
             };
@@ -429,7 +433,7 @@ pub mod authentic_execution {
                                             &u16_to_data(nonce), &conn.get_encryption()) {
                Ok(p) => p,
                Err(e) => {
-                   error!(&format!("{}", e));
+                   error!("{}", e);
                    return; //encryption failed (there's nothing we can do in this case)
                }
             };
@@ -439,7 +443,7 @@ pub mod authentic_execution {
             conn.increment_nonce();
             let func = || drop(map);
             if let Err(e) = send_to_em(EntrypointID::HandleInput as u16, conn_id, payload, false, func) {
-                error!(&format!("{}", e));
+                error!("{}", e);
             }
 
             _measure_time("handle_output_after_dispatch");
@@ -523,7 +527,7 @@ pub mod authentic_execution {
             -> Result<Option<ResultMessage>, Error> {
         let addr = format!("127.0.0.1:{}", *EM_PORT);
 
-        debug!(&format!("Sending request with conn ID {} to EM", conn_id));
+        debug!("Sending request with conn ID {} to EM", conn_id);
 
         // Create payload
         let data_len = data.len();

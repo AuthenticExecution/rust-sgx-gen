@@ -16,7 +16,7 @@ fn handle_client(mut stream: TcpStream) {
     let payload = match reactive_net::read_message(&mut stream) {
         Ok(p) => p,
         Err(e) => {
-            error!(&format!("{}", e));
+            error!("{}", e);
             return;
         }
     };
@@ -24,7 +24,7 @@ fn handle_client(mut stream: TcpStream) {
     let resp = handle_entrypoint(&payload);
 
     if let Err(e) = reactive_net::write_result(&mut stream, &resp) {
-        error!(&format!("{}", e));
+        error!("{}", e);
     }
 }
 
@@ -41,7 +41,7 @@ fn remote_attestation() -> std::io::Result<String> {
     let context = match EnclaveRaContext::init(*SP_VKEY_PEM) {
         Ok(c) => c,
         Err(e) => {
-            error!(&format!("{:?}", e));
+            error!("{:?}", e);
             panic!("{:?}", e);
         }
     };
@@ -50,7 +50,7 @@ fn remote_attestation() -> std::io::Result<String> {
     let result = match context.do_attestation(&mut stream) {
         Ok(r) => r,
         Err(e) => {
-            error!(&format!("{:?}", e));
+            error!("{:?}", e);
             panic!("{:?}", e);
         }
     };
@@ -93,7 +93,7 @@ pub fn run() -> std::io::Result<()> {
     // authentic execution
     let host = format!("127.0.0.1:{}", port); // no one from outside can access SM
 
-    info!(&format!("Listening on {}", host));
+    info!("Listening on {}", host);
     let listener = TcpListener::bind(host)?;
 
     match *NUM_THREADS {
