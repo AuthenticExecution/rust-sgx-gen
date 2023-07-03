@@ -2,6 +2,7 @@ pub mod authentic_execution {
     extern crate base64;
     extern crate reactive_crypto;
     extern crate reactive_net;
+    extern crate sgx_attestation;
 
     use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;

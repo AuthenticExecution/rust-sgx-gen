@@ -4,8 +4,6 @@ use crate::__authentic_execution::authentic_execution::{MODULE_NAME, EM_PORT, MO
 extern crate base64;
 use threadpool::ThreadPool;
 
-use ra_enclave::EnclaveRaContext;
-
 lazy_static! {
     pub static ref MODULE_KEY: String = remote_attestation().unwrap();
     pub static ref SP_VKEY_PEM: &'static str = "__SP_VKEY_PEM__";
@@ -31,23 +29,9 @@ fn handle_client(mut stream: TcpStream) {
 
 fn remote_attestation() -> std::io::Result<String> {
     info!("Waiting for attestation");
-
     let port = *EM_PORT + *MODULE_ID;
-    let listener = TcpListener::bind(("0.0.0.0", port))?;
 
-    let mut stream = listener.accept()?.0;
-
-    debug!("Connected to ra_client");
-    let context = match EnclaveRaContext::init(*SP_VKEY_PEM) {
-        Ok(c) => c,
-        Err(e) => {
-            error!("{:?}", e);
-            panic!("{:?}", e);
-        }
-    };
-
-    debug!("Starting attestation process");
-    let result = match context.do_attestation(&mut stream) {
+    let result = match sgx_attestation::do_attestation(port, *SP_VKEY_PEM) {
         Ok(r) => r,
         Err(e) => {
             error!("{:?}", e);
@@ -57,7 +41,7 @@ fn remote_attestation() -> std::io::Result<String> {
 
     info!("Remote attestation succeeded");
 
-    Ok(base64::encode(&result.1))
+    Ok(base64::encode(&result))
 }
 
 fn run_single_thread(listener : TcpListener) {

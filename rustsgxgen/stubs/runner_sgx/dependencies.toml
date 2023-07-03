@@ -2,6 +2,4 @@
 resolver = "2"
 
 [dependencies]
-ra-common = { git = "https://github.com/AuthenticExecution/rust-sgx-remote-attestation.git" }
-ra-enclave = { git = "https://github.com/AuthenticExecution/rust-sgx-remote-attestation.git" }
-sgx-crypto = { git = "https://github.com/AuthenticExecution/rust-sgx-remote-attestation.git" }
+sgx_attestation = { git = "https://github.com/AuthenticExecution/rust-sgx-libs.git", features = ["enclave"] }

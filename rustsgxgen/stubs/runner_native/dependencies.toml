@@ -1,2 +1,5 @@
 [package]
 resolver = "2"
+
+[dependencies]
+sgx_attestation = { git = "https://github.com/AuthenticExecution/rust-sgx-libs.git" }
